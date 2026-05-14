@@ -16,6 +16,30 @@ Este documento detalla el plan de implementación para el backend completo de **
 - **UUID** como clave primaria
 - **Inyección de dependencias por constructor** (nunca @Autowired)
 - **ApiResponse<T>** en todos los endpoints
+- **Resilience4j** para Circuit Breaker
+- **Spring Cloud Vault** para secrets management
+
+---
+
+## Dependencias Maven por Servicio
+
+### servicio-auth
+- `spring-boot-starter-security`
+- `jjwt`
+- `spring-cloud-starter-vault-config`
+- `spring-cloud-starter-netflix-eureka-client`
+
+### servicio-clientes
+- `spring-cloud-openfeign`
+- `spring-cloud-starter-netflix-eureka-client`
+- `spring-cloud-starter-config`
+- `resilience4j`
+
+### servicio-paquetes
+- `spring-cloud-openfeign`
+- `spring-cloud-starter-netflix-eureka-client`
+- `spring-cloud-starter-config`
+- `resilience4j`
 
 ---
 
@@ -72,10 +96,111 @@ CONFIG_GIT_URI=
 ### 1.3 Repositorio GitHub config-repo
 
 Crear repositorio `rapidocourier-config` con archivos YAML:
-- application.yaml
-- servicio-auth.yaml
-- servicio-clientes.yaml
-- servicio-paquetes.yaml
+
+**application.yaml** (configuración común):
+```yaml
+spring:
+  application:
+    name: rapidocourier
+  cloud:
+    vault:
+      host: ${SPRING_CLOUD_VAULT_HOST:localhost}
+      port: 8200
+      token: ${SPRING_CLOUD_VAULT_TOKEN:}
+      kv:
+        enabled: true
+        backend: secret
+        default-context: rapidocourier
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+```
+
+**servicio-clientes.yaml** (incluye Resilience4j y Eureka heartbeat):
+```yaml
+server:
+  port: 8082
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/rapidocourier_clientes
+    username: ${db.username}
+    password: ${db.password}
+
+reniec:
+  api:
+    url: https://api.decolecta.com/v1/reniec/dni
+    token: ${reniec.token}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      reniec:
+        sliding-window-size: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+
+eureka:
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+```
+
+**servicio-paquetes.yaml** (incluye Circuit Breaker para servicio-clientes):
+```yaml
+server:
+  port: 8083
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/rapidocourier_paquetes
+    username: ${db.username}
+    password: ${db.password}
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      servicio-clientes:
+        sliding-window-size: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+
+eureka:
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+```
+
+**servicio-auth.yaml**:
+```yaml
+server:
+  port: 8081
+
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:5432/rapidocourier_auth
+    username: ${db.username}
+    password: ${db.password}
+
+jwt:
+  secret: ${jwt.secret}
+
+eureka:
+  instance:
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
+```
 
 ---
 
@@ -223,6 +348,11 @@ public class Usuario {
     private String username;
     private String passwordHash;
     private Set<String> roles;
+}
+
+// domain/model/RolNombre.java
+public enum RolNombre {
+    ADMIN, OPERADOR, CLIENTE
 }
 ```
 
@@ -954,6 +1084,15 @@ public class PaqueteController {
         return ApiResponse.ok(toResponse(consultarUseCase.buscarPorId(id)));
     }
 
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    public ResponseEntity<ApiResponse<PaqueteResponse>> actualizar(
+            @PathVariable UUID id,
+            @Valid @RequestBody PaqueteRequest request) {
+        // Actualizar datos del paquete
+        return ApiResponse.ok(toResponse(paquete));
+    }
+
     @PatchMapping("/{id}/estado")
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
     public ResponseEntity<ApiResponse<Void>> cambiarEstado(
@@ -961,6 +1100,21 @@ public class PaqueteController {
             @Valid @RequestBody CambioEstadoRequest request) {
         String usuario = "operador"; // obtener de header X-User-Id
         estadoUseCase.cambiarEstado(id, request.nuevoEstado(), usuario);
+        return ApiResponse.ok(null);
+    }
+
+    @GetMapping("/{id}/historial")
+    public ResponseEntity<ApiResponse<List<HistorialResponse>>> historial(@PathVariable UUID id) {
+        return ApiResponse.ok(estadoUseCase.obtenerHistorial(id).stream()
+            .map(this::toHistorialResponse).toList());
+    }
+
+    @PostMapping("/{id}/categorias/{catId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    public ResponseEntity<ApiResponse<Void>> asignarCategoria(
+            @PathVariable UUID id,
+            @PathVariable UUID catId) {
+        // Asignar categoría a paquete
         return ApiResponse.ok(null);
     }
 
@@ -987,6 +1141,51 @@ public class PaqueteController {
         // eliminar lógica
         return ApiResponse.noContent();
     }
+}
+```
+
+### 6.9 CategoriaController
+
+```java
+// infrastructure/adapter/in/rest/controller/CategoriaController.java
+@RestController
+@RequestMapping("/api/v1/categorias")
+public class CategoriaController {
+
+    @PostMapping
+    @PreAuthorize("hasRole('ADMIN')")
+    public ResponseEntity<ApiResponse<CategoriaResponse>> crear(
+            @Valid @RequestBody CategoriaRequest request) {
+        // Crear categoría
+        return ApiResponse.created(categoriaResponse);
+    }
+
+    @GetMapping
+    public ResponseEntity<ApiResponse<List<CategoriaResponse>>> listar() {
+        // Listar categorías
+        return ApiResponse.ok(lista);
+    }
+}
+```
+
+### 6.10 ClienteFeignClient con Circuit Breaker
+
+```java
+// infrastructure/adapter/out/cliente/ClienteFeignClient.java
+@FeignClient(name = "servicio-clientes")
+public interface ClienteFeignClient {
+    @GetMapping("/api/v1/clientes/{id}")
+    ApiResponse<ClienteDto> buscarCliente(@PathVariable UUID id);
+}
+
+// En PaqueteService o en un adaptador separado:
+@CircuitBreaker(name = "servicio-clientes", fallbackMethod = "fallbackCliente")
+public ClienteDto obtenerCliente(UUID id) {
+    return clienteFeignClient.buscarCliente(id).getData();
+}
+
+public ClienteDto fallbackCliente(UUID id, Exception ex) {
+    throw new ExternalServiceException("servicio-clientes no disponible (circuit breaker abierto)");
 }
 ```
 
@@ -1228,6 +1427,80 @@ docker compose up --build -d
 
 ---
 
+## Validaciones Bean Validation (mínimo 6 tipos)
+
+Usar obligatoriamente en los DTOs de request:
+
+| Anotación | Ejemplo de uso |
+|-----------|----------------|
+| `@NotBlank` | `String dni` |
+| `@NotNull` | `UUID remitenteId` |
+| `@Email` | `String email` |
+| `@Pattern` | `@Pattern(regexp = "\\d{8}") String dni` |
+| `@Positive` | `Double pesoKg` |
+| `@Size` | `@Size(max = 500) String descripcion` |
+| `@PositiveOrZero` | `Double valorDeclarado` |
+
+---
+
+## GlobalExceptionHandler
+
+```java
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiResponse<Map<String, List<String>>>> handleValidation(
+            MethodArgumentNotValidException ex) {
+        Map<String, List<String>> errores = new HashMap<>();
+        ex.getBindingResult().getFieldErrors().forEach(e ->
+            errores.computeIfAbsent(e.getField(), k -> new ArrayList<>())
+                   .add(e.getDefaultMessage()));
+        return ResponseEntity.badRequest()
+            .body(new ApiResponse<>(false, "Validación fallida", errores));
+    }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<ApiResponse<Void>> handleNotFound(ResourceNotFoundException ex) {
+        return ApiResponse.error(HttpStatus.NOT_FOUND, ex.getMessage());
+    }
+
+    @ExceptionHandler({ConflictException.class, InvalidStateTransitionException.class})
+    public ResponseEntity<ApiResponse<Void>> handleConflict(RuntimeException ex) {
+        return ApiResponse.error(HttpStatus.CONFLICT, ex.getMessage());
+    }
+
+    @ExceptionHandler(ExternalServiceException.class)
+    public ResponseEntity<ApiResponse<Void>> handleExternal(ExternalServiceException ex) {
+        return ApiResponse.error(HttpStatus.BAD_GATEWAY, ex.getMessage());
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiResponse<Void>> handleGeneric(Exception ex) {
+        return ApiResponse.error(HttpStatus.INTERNAL_SERVER_ERROR,
+            "Error inesperado: " + ex.getMessage());
+    }
+}
+```
+
+---
+
+## Códigos HTTP Requeridos
+
+| Situación | Código |
+|-----------|--------|
+| GET / PUT exitoso | 200 |
+| POST exitoso | 201 |
+| DELETE exitoso | 204 |
+| Validación fallida | 400 con `Map<String, List<String>>` por campo |
+| No encontrado | 404 |
+| Conflicto / duplicado / transición inválida | 409 |
+| Acceso denegado | 403 |
+| Fallo de API externa (RENIEC / Feign) | 502 |
+| Error inesperado | 500 |
+
+---
+
 ## Resumen de Entregables
 
 | Fase | Servicios | Pruebas |
@@ -1252,9 +1525,14 @@ docker compose up --build -d
 | GET | /api/v1/clientes | Listar clientes | ADMIN, OPERADOR |
 | GET | /api/v1/clientes/{id} | Obtener cliente por ID | ADMIN, OPERADOR |
 | DELETE | /api/v1/clientes/{id} | Eliminar cliente | ADMIN |
-| POST | /api/v1/paquetes | Registrar paquete | ADMIN, OPERADOR |
-| GET | /api/v1/paquetes/{id} | Obtener paquete | Autenticado |
-| PATCH | /api/v1/paquetes/{id}/estado | Cambiar estado | ADMIN, OPERADOR |
-| GET | /api/v1/paquetes?busqueda=texto | Buscar por código | Autenticado |
-| GET | /api/v1/paquetes?sucursal=...&estado=... | Filtrar | Autenticado |
+| POST | /api/v1/paquetes | Registrar paquete (calcula tarifa) | ADMIN, OPERADOR |
+| GET | /api/v1/paquetes/{id} | Obtener paquete con datos de clientes | Autenticado |
+| PUT | /api/v1/paquetes/{id} | Actualizar datos del paquete | ADMIN, OPERADOR |
 | DELETE | /api/v1/paquetes/{id} | Eliminar paquete | ADMIN |
+| PATCH | /api/v1/paquetes/{id}/estado | Cambiar estado (valida transición) | ADMIN, OPERADOR |
+| GET | /api/v1/paquetes/{id}/historial | Historial de estados | Autenticado |
+| GET | /api/v1/paquetes?busqueda=texto | Búsqueda por código o nombre de cliente | Autenticado |
+| GET | /api/v1/paquetes?sucursal=...&estado=... | Filtrar por sucursal y estado | Autenticado |
+| POST | /api/v1/paquetes/{id}/categorias/{catId} | Asignar categoría a paquete | ADMIN, OPERADOR |
+| POST | /api/v1/categorias | Crear categoría | ADMIN |
+| GET | /api/v1/categorias | Listar categorías | ADMIN, OPERADOR |
