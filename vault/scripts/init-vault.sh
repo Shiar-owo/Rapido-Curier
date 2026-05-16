@@ -26,6 +26,9 @@ if echo "$STATUS" | grep -q '"initialized":true'; then
         if [ -f /vault/data/vault-credentials.env ]; then
             . /vault/data/vault-credentials.env
             vault operator unseal $VAULT_UNSEAL_KEY
+        else
+            echo "ERROR: Vault is initialized but /vault/data/vault-credentials.env does not exist!"
+            echo "Force unsealing is impossible. We must wait."
         fi
     fi
 else
@@ -39,6 +42,10 @@ else
 
     vault operator unseal $UNSEAL_KEY
     echo "Vault initialized!"
+
+    # Inyectar el Token en la sesión actual del script para los comandos 'kv put'
+    export VAULT_TOKEN=$ROOT_TOKEN
+    sleep 2
 fi
 
 # Enable KV and load secrets
