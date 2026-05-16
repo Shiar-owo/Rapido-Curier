@@ -1,3 +1,36 @@
 spring:
   application:
     name: config-server
+  config:
+    import: optional:vault://
+  cloud:
+    vault:
+      host: ${SPRING_CLOUD_VAULT_HOST:localhost}
+      port: 8200
+      token: ${SPRING_CLOUD_VAULT_TOKEN}
+      scheme: http
+      kv:
+        enabled: true
+        backend: secret
+        default-context: rapidocourier
+    config:
+      server:
+        git:
+          uri: ${SPRING_CLOUD_CONFIG_SERVER_GIT_URI:}
+
+server:
+  port: 8888
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: always
+
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://localhost:8761/eureka/}
