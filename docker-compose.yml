@@ -116,6 +116,8 @@ services:
     build: ./eureka-server
     container_name: eureka-server
     restart: unless-stopped
+    ports:
+      - "8761:8761"
     depends_on:
       config-server:
         condition: service_healthy
