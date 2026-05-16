@@ -97,6 +97,8 @@ services:
     build: ./config-server
     container_name: config-server
     restart: unless-stopped
+    ports:
+      - "8888:8888"
     environment:
       SPRING_CLOUD_CONFIG_SERVER_GIT_URI: ${CONFIG_GIT_URI}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
