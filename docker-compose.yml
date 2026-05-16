@@ -44,7 +44,7 @@ services:
     environment:
       POSTGRES_DB: rapidocourier_auth
       POSTGRES_USER: auth_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/auth_db_password
+      POSTGRES_PASSWORD: auth_pass
     volumes:
       - postgres_auth_data:/var/lib/postgresql/data
     networks:
@@ -62,7 +62,7 @@ services:
     environment:
       POSTGRES_DB: rapidocourier_clientes
       POSTGRES_USER: clientes_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/clientes_db_password
+      POSTGRES_PASSWORD: clientes_pass
     volumes:
       - postgres_clientes_data:/var/lib/postgresql/data
     networks:
@@ -80,7 +80,7 @@ services:
     environment:
       POSTGRES_DB: rapidocourier_paquetes
       POSTGRES_USER: paquetes_user
-      POSTGRES_PASSWORD_FILE: /run/secrets/paquetes_db_password
+      POSTGRES_PASSWORD: paquetes_pass
     volumes:
       - postgres_paquetes_data:/var/lib/postgresql/data
     networks:
@@ -99,11 +99,7 @@ services:
     restart: unless-stopped
     environment:
       SPRING_CLOUD_CONFIG_SERVER_GIT_URI: ${CONFIG_GIT_URI}
-      SPRING_CLOUD_VAULT_TOKEN: ${VAULT_TOKEN}
-      SPRING_CLOUD_VAULT_HOST: vault
-    depends_on:
-      vault:
-        condition: service_healthy
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     networks:
       - rapidocourier-net
     healthcheck:
@@ -131,89 +127,19 @@ services:
 
   # ── Microservicios de negocio ────────────────────────────────────────────────
 
-  servicio-auth:
-    build: ./servicio-auth
-    container_name: servicio-auth
+  auth-service:
+    build: ./auth-service
+    container_name: auth-service
     restart: unless-stopped
     environment:
-      SPRING_CLOUD_VAULT_TOKEN: ${VAULT_TOKEN}
-      SPRING_CLOUD_VAULT_HOST: vault
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       DB_HOST: postgres-auth
+      DB_USERNAME: auth_user
+      DB_PASSWORD: auth_pass
     depends_on:
       postgres-auth:
         condition: service_healthy
-      vault:
-        condition: service_healthy
       eureka-server:
         condition: service_healthy
-    networks:
-      - rapidocourier-net
-
-  servicio-clientes:
-    build: ./servicio-clientes
-    container_name: servicio-clientes
-    restart: unless-stopped
-    environment:
-      SPRING_CLOUD_VAULT_TOKEN: ${VAULT_TOKEN}
-      SPRING_CLOUD_VAULT_HOST: vault
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      DB_HOST: postgres-clientes
-    depends_on:
-      postgres-clientes:
-        condition: service_healthy
-      vault:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
-    networks:
-      - rapidocourier-net
-
-  servicio-paquetes:
-    build: ./servicio-paquetes
-    container_name: servicio-paquetes
-    restart: unless-stopped
-    environment:
-      SPRING_CLOUD_VAULT_TOKEN: ${VAULT_TOKEN}
-      SPRING_CLOUD_VAULT_HOST: vault
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-      DB_HOST: postgres-paquetes
-    depends_on:
-      postgres-paquetes:
-        condition: service_healthy
-      vault:
-        condition: service_healthy
-      eureka-server:
-        condition: service_healthy
-      servicio-clientes:
-        condition: service_started
-    networks:
-      - rapidocourier-net
-
-  # ── API Gateway (único punto de entrada) ────────────────────────────────────
-
-  api-gateway:
-    build: ./api-gateway
-    container_name: api-gateway
-    restart: unless-stopped
-    ports:
-      - "8080:8080"
-    environment:
-      SPRING_CLOUD_VAULT_TOKEN: ${VAULT_TOKEN}
-      SPRING_CLOUD_VAULT_HOST: vault
-      SPRING_CONFIG_IMPORT: configserver:http://config-server:8888
-      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
-    depends_on:
-      eureka-server:
-        condition: service_healthy
-      servicio-auth:
-        condition: service_started
-      servicio-clientes:
-        condition: service_started
-      servicio-paquetes:
-        condition: service_started
     networks:
       - rapidocourier-net
