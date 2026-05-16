@@ -29,10 +29,10 @@ jobs:
           cache: 'maven'
 
       - name: Run tests
-        run: mvn test -B
+        run: mvn test -B -U
 
       - name: Build package
-        run: mvn package -DskipTests -B
+        run: mvn package -DskipTests -B -U
 
       - name: Build Docker image
         run: |
