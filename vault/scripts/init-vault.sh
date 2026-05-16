@@ -45,10 +45,10 @@ fi
 vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
 vault kv put secret/rapidocourier/auth \
-    db.username="auth_user" db.password="auth_pass" jwt.secret="clave-32-caracteres-minimo-aqui"
+    db.username="auth_user" db.password="auth_pass" jwt.secret="contrasenia-super-mega-secreta-32-caracteres"
 
 vault kv put secret/rapidocourier/clientes \
-    db.username="clientes_user" db.password="clientes_pass" reniec.token="Bearer reniec_token"
+    db.username="clientes_user" db.password="clientes_pass" reniec.token="sk_14107.2R91IK9p8iH3dv0u5D7RJYgwDHgykbli"
 
 vault kv put secret/rapidocourier/paquetes \
     db.username="paquetes_user" db.password="paquetes_pass"
