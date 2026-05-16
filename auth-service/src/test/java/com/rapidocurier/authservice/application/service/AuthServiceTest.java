@@ -66,7 +66,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void register_exitoso_creaUsuarioConRolCliente() {
+    void register_exitoso_creaUsuarioConRolParametro() {
         when(usuarios.existePorEmail("new@example.com")).thenReturn(false);
         when(encoder.encode("password123")).thenReturn("$2a$encoded");
         when(usuarios.guardar(any(Usuario.class))).thenAnswer(invocation -> {
@@ -74,11 +74,11 @@ class AuthServiceTest {
             return new Usuario(u.getNombre(), u.getPassword(), u.getEmail(), u.getRoles());
         });
 
-        Usuario result = authService.registrar("New User", "new@example.com", "password123");
+        Usuario result = authService.registrar("New User", "new@example.com", "password123", "ADMIN");
 
         assertEquals("New User", result.getNombre());
         assertEquals("new@example.com", result.getEmail());
-        assertTrue(result.getRoles().contains("CLIENTE"));
+        assertTrue(result.getRoles().contains("ADMIN"));
         verify(usuarios).guardar(any(Usuario.class));
     }
 
@@ -87,6 +87,6 @@ class AuthServiceTest {
         when(usuarios.existePorEmail("existing@example.com")).thenReturn(true);
 
         assertThrows(ConflictException.class,
-                () -> authService.registrar("Existing User", "existing@example.com", "password123"));
+                () -> authService.registrar("Existing User", "existing@example.com", "password123", "CLIENTE"));
     }
 }

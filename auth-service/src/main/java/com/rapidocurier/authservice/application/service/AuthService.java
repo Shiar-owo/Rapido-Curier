@@ -36,11 +36,11 @@ public class AuthService implements LoginUseCase, RegisterUseCase {
     }
 
     @Override
-    public Usuario registrar(String nombre, String email, String password) {
+    public Usuario registrar(String nombre, String email, String password, String rol) {
         if (usuarios.existePorEmail(email)) {
             throw new ConflictException("El email ya está registrado");
         }
-        Usuario nuevo = new Usuario(nombre, encoder.encode(password), email, Set.of("CLIENTE"));
+        Usuario nuevo = new Usuario(nombre, encoder.encode(password), email, Set.of(rol));
         return usuarios.guardar(nuevo);
     }
 }
