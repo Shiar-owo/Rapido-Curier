@@ -3,35 +3,3 @@ spring:
     name: auth-service
   config:
     import: optional:configserver:http://config-server:8888
-  datasource:
-    url: jdbc:postgresql://${DB_HOST:postgres-auth}:5432/rapidocourier_auth
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
-    driver-class-name: org.postgresql.Driver
-
-server:
-  port: 8081
-
-jwt:
-  secret: ${JWT_SECRET:default-secret-key-minimum-32-chars}
-  expiration: 86400000
-
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,info
-  endpoint:
-    health:
-      show-details: always
-
-eureka:
-  instance:
-    prefer-ip-address: true
-    lease-renewal-interval-in-seconds: 10
-    lease-expiration-duration-in-seconds: 30
-  client:
-    register-with-eureka: true
-    fetch-registry: true
-    service-url:
-      defaultZone: ${EUREKA_CLIENT_SERVICEURL_DEFAULTZONE:http://eureka-server:8761/eureka/}
