@@ -1,0 +1,9 @@
+jwt:
+  secret: test-secret-key-test-secret-key-test-secret-key
+  expiration: 3600000
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/authdb
+    username: postgres
+    password: postgres
