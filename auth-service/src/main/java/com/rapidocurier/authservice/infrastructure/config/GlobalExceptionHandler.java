@@ -1,6 +1,7 @@
 package com.rapidocurier.authservice.infrastructure.config;
 
 import com.rapidocurier.authservice.domain.exception.ConflictException;
+import com.rapidocurier.authservice.domain.exception.CredencialesInvalidasException;
 import com.rapidocurier.authservice.infrastructure.common.ApiResponse;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -28,6 +29,12 @@ public class GlobalExceptionHandler {
         });
         return ResponseEntity.badRequest()
                 .body(new ApiResponse<>(false, "Validación fallida", errores));
+    }
+
+    @ExceptionHandler(CredencialesInvalidasException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCredencialesInvalidas(CredencialesInvalidasException ex) {
+        return ResponseEntity.status(HttpStatus.UNAUTHORIZED)
+                .body(ApiResponse.error(ex.getMessage()));
     }
 
     @ExceptionHandler(ConflictException.class)
