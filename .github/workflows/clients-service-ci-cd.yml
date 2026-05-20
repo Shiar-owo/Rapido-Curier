@@ -1,0 +1,40 @@
+name: CI/CD - Clients Service
+
+on:
+  push:
+    branches: [ main, develop, clients-service ]
+    paths:
+      - 'clients-service/**'
+  pull_request:
+    branches: [ main, develop, clients-service ]
+    paths:
+      - 'clients-service/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: clients-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Run tests
+        run: mvn test -B -U
+
+      - name: Build package
+        run: mvn package -DskipTests -B -U
+
+      - name: Build Docker image
+        run: |
+          docker build -t rapidocurier/clients-service:${{ github.sha }} .
+          docker build -t rapidocurier/clients-service:latest .
