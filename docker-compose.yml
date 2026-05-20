@@ -147,3 +147,24 @@ services:
         condition: service_healthy
     networks:
       - rapidocourier-net
+
+  clients-service:
+    build: ./clients-service
+    container_name: clients-service
+    restart: unless-stopped
+    ports:
+      - "8082:8082"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      DB_HOST: postgres-clientes
+      DB_USERNAME: clientes_user
+      DB_PASSWORD: clientes_pass
+    depends_on:
+      postgres-clientes:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+    networks:
+      - rapidocourier-net
