@@ -320,8 +320,6 @@ servicio-auth/
         │   │           ├── request/
         │   │           │   ├── LoginRequest.java
         │   │           │   └── RegisterRequest.java
-        │   │           └── response/
-        │   │               └── AuthResponse.java
         │   └── out/
         │       ├── persistence/
         │       │   ├── entity/
@@ -345,8 +343,9 @@ servicio-auth/
 // domain/model/Usuario.java - POJO puro
 public class Usuario {
     private UUID id;
-    private String username;
-    private String passwordHash;
+    private String nombre;
+    private String email;
+    private String password;
     private Set<String> roles;
 }
 
@@ -361,12 +360,12 @@ public enum RolNombre {
 ```java
 // domain/port/in/LoginUseCase.java
 public interface LoginUseCase {
-    String login(String username, String password);
+    String login(String email, String password);
 }
 
 // domain/port/in/RegisterUseCase.java
 public interface RegisterUseCase {
-    Usuario registrar(String username, String password);
+    Usuario registrar(String nombre, String email, String password, String rol);
 }
 ```
 
@@ -375,8 +374,8 @@ public interface RegisterUseCase {
 ```java
 // domain/port/out/UsuarioRepositoryPort.java
 public interface UsuarioRepositoryPort {
-    Optional<Usuario> buscarPorUsername(String username);
-    boolean existePorUsername(String username);
+    Optional<Usuario> buscarPorEmail(String email);
+    boolean existePorEmail(String email);
     Usuario guardar(Usuario usuario);
 }
 
@@ -404,19 +403,19 @@ public class AuthService implements LoginUseCase, RegisterUseCase {
     }
 
     @Override
-    public String login(String username, String password) {
-        Usuario u = usuarios.buscarPorUsername(username)
+    public String login(String email, String password) {
+        Usuario u = usuarios.buscarPorEmail(email)
             .orElseThrow(() -> new CredencialesInvalidasException("Usuario no encontrado"));
-        if (!encoder.matches(password, u.getPasswordHash()))
+        if (!encoder.matches(password, u.getPassword()))
             throw new CredencialesInvalidasException("Contraseña incorrecta");
         return jwt.generarToken(u);
     }
 
     @Override
-    public Usuario registrar(String username, String password) {
-        if (usuarios.existePorUsername(username))
-            throw new ConflictException("El usuario ya existe");
-        Usuario nuevo = new Usuario(null, username, encoder.encode(password), Set.of("CLIENTE"));
+    public Usuario registrar(String nombre, String email, String password, String rol) {
+        if (usuarios.existePorEmail(email))
+            throw new ConflictException("El email ya está registrado");
+        Usuario nuevo = new Usuario(nombre, encoder.encode(password), email, Set.of(rol));
         return usuarios.guardar(nuevo);
     }
 }
@@ -431,22 +430,25 @@ public class AuthService implements LoginUseCase, RegisterUseCase {
 public class AuthController {
     private final LoginUseCase loginUseCase;
     private final RegisterUseCase registerUseCase;
+    private final JwtPort jwtPort;
 
-    public AuthController(LoginUseCase loginUseCase, RegisterUseCase registerUseCase) {
+    public AuthController(LoginUseCase loginUseCase, RegisterUseCase registerUseCase, JwtPort jwtPort) {
         this.loginUseCase = loginUseCase;
         this.registerUseCase = registerUseCase;
+        this.jwtPort = jwtPort;
     }
 
     @PostMapping("/login")
     public ResponseEntity<ApiResponse<String>> login(@Valid @RequestBody LoginRequest request) {
-        String token = loginUseCase.login(request.username(), request.password());
+        String token = loginUseCase.login(request.email(), request.password());
         return ApiResponse.ok(token);
     }
 
     @PostMapping("/register")
-    public ResponseEntity<ApiResponse<AuthResponse>> register(@Valid @RequestBody RegisterRequest request) {
-        Usuario usuario = registerUseCase.registrar(request.username(), request.password());
-        return ApiResponse.created(new AuthResponse(usuario.getId(), usuario.getUsername()));
+    public ResponseEntity<ApiResponse<String>> register(@Valid @RequestBody RegisterRequest request) {
+        Usuario usuario = registerUseCase.registrar(request.nombre(), request.email(), request.password(), request.rol());
+        String token = jwtPort.generarToken(usuario);
+        return ApiResponse.created(token);
     }
 }
 ```
@@ -470,40 +472,40 @@ class AuthServiceTest {
 
     @Test
     void login_exitoso_retornaToken() {
-        when(usuarios.buscarPorUsername("admin")).thenReturn(Optional.of(
-            new Usuario(UUID.randomUUID(), "admin", "hash", Set.of("ADMIN"))));
+        when(usuarios.buscarPorEmail("admin@test.com")).thenReturn(Optional.of(
+            new Usuario(UUID.randomUUID(), "Admin", "hash", "admin@test.com", Set.of("ADMIN"))));
         when(jwt.generarToken(any())).thenReturn("jwt.token");
 
-        String result = service.login("admin", "admin123");
+        String result = service.login("admin@test.com", "admin123");
 
         assertEquals("jwt.token", result);
     }
 
     @Test
     void login_usuarioNoExiste_lanzaExcepcion() {
-        when(usuarios.buscarPorUsername("admin")).thenReturn(Optional.empty());
+        when(usuarios.buscarPorEmail("admin@test.com")).thenReturn(Optional.empty());
 
         assertThrows(CredencialesInvalidasException.class,
-            () -> service.login("admin", "admin123"));
+            () -> service.login("admin@test.com", "admin123"));
     }
 
     @Test
     void login_contrasenaIncorrecta_lanzaExcepcion() {
-        when(usuarios.buscarPorUsername("admin")).thenReturn(Optional.of(
-            new Usuario(UUID.randomUUID(), "admin", "hash", Set.of("ADMIN"))));
+        when(usuarios.buscarPorEmail("admin@test.com")).thenReturn(Optional.of(
+            new Usuario(UUID.randomUUID(), "Admin", "hash", "admin@test.com", Set.of("ADMIN"))));
 
         assertThrows(CredencialesInvalidasException.class,
-            () -> service.login("admin", "wrong"));
+            () -> service.login("admin@test.com", "wrong"));
     }
 
     @Test
-    void register_exitoso_creaUsuarioConRolCliente() {
-        when(usuarios.existePorUsername("nuevo")).thenReturn(false);
+    void register_exitoso_creaUsuario() {
+        when(usuarios.existePorEmail("nuevo@test.com")).thenReturn(false);
         when(usuarios.guardar(any())).thenAnswer(i -> i.getArgument(0));
 
-        Usuario result = service.registrar("nuevo", "password");
+        Usuario result = service.registrar("Nuevo", "nuevo@test.com", "password", "CLIENTE");
 
-        assertEquals("nuevo", result.getUsername());
+        assertEquals("nuevo@test.com", result.getEmail());
         assertTrue(result.getRoles().contains("CLIENTE"));
     }
 }

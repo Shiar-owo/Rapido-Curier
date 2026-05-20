@@ -2,11 +2,11 @@ name: CI/CD - Auth Service
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [ main, develop, Auth-service ]
     paths:
       - 'auth-service/**'
   pull_request:
-    branches: [ main, develop ]
+    branches: [ main, develop, Auth-service ]
     paths:
       - 'auth-service/**'
 
