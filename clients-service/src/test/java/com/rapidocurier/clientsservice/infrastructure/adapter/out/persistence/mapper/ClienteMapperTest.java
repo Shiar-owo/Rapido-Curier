@@ -3,20 +3,15 @@ package com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence.m
 import com.rapidocurier.clientsservice.domain.model.Cliente;
 import com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence.entity.ClienteEntity;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.InjectMocks;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.OffsetDateTime;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
 
-@ExtendWith(MockitoExtension.class)
 class ClienteMapperTest {
 
-    @InjectMocks
-    private ClienteMapperImpl mapper;
+    private final ClienteMapperImpl mapper = new ClienteMapperImpl();
 
     @Test
     void toEntity_mapsAllFieldsFromDomain() {
