@@ -1,0 +1,25 @@
+spring:
+  application:
+    name: clients-service
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  flyway:
+    enabled: false
+
+resilience4j:
+  circuitbreaker:
+    instances:
+      reniec:
+        sliding-window-size: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+
+server:
+  port: 0
