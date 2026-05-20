@@ -15,6 +15,7 @@ public interface UsuarioMapper {
     default Usuario toDomain(UsuarioEntity entity) {
         if (entity == null) return null;
         return new Usuario(
+                entity.getId(),
                 entity.getNombre(),
                 entity.getPassword(),
                 entity.getEmail(),

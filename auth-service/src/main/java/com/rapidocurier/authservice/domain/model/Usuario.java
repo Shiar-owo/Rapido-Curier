@@ -18,6 +18,14 @@ public class Usuario {
         this.roles = roles;
     }
 
+    public Usuario(UUID id, String nombre, String password, String email, Set<String> roles) {
+        this.id = id;
+        this.nombre = nombre;
+        this.password = password;
+        this.email = email;
+        this.roles = roles;
+    }
+
     public UUID getId() {
         return id;
     }
