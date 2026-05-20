@@ -7,7 +7,6 @@ import com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence.ma
 import com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence.repository.ClienteJpaRepository;
 import org.springframework.stereotype.Component;
 
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -26,8 +25,6 @@ public class ClienteRepositoryAdapter implements ClienteRepositoryPort {
     @Override
     public Cliente guardar(Cliente cliente) {
         ClienteEntity entity = mapper.toEntity(cliente);
-        entity.setCreatedAt(OffsetDateTime.now());
-        entity.setUpdatedAt(OffsetDateTime.now());
         return mapper.toDomain(repository.save(entity));
     }
 
