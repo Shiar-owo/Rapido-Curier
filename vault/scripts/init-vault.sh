@@ -51,14 +51,14 @@ fi
 # Enable KV and load secrets
 vault secrets enable -path=secret kv-v2 2>/dev/null || true
 
-vault kv put secret/rapidocourier/auth \
-    db.username="auth_user" db.password="auth_pass" jwt.secret="contrasenia-super-mega-secreta-32-caracteres"
+vault kv put secret/rapidocourier/auth-service \
+    spring.datasource.username="auth_user" spring.datasource.password="auth_pass" jwt.secret="contrasenia-super-mega-secreta-32-caracteres"
 
-vault kv put secret/rapidocourier/clientes \
-    db.username="clientes_user" db.password="clientes_pass" reniec.token="sk_14107.2R91IK9p8iH3dv0u5D7RJYgwDHgykbli"
+vault kv put secret/rapidocourier/clients-service \
+    spring.datasource.username="clientes_user" spring.datasource.password="clientes_pass" reniec.api.token="sk_14107.2R91IK9p8iH3dv0u5D7RJYgwDHgykbli"
 
-vault kv put secret/rapidocourier/paquetes \
-    db.username="paquetes_user" db.password="paquetes_pass"
+vault kv put secret/rapidocourier/paquetes-service \
+    spring.datasource.username="paquetes_user" spring.datasource.password="paquetes_pass"
 
 echo "Secrets loaded!"
 

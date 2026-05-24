@@ -97,10 +97,14 @@ services:
     build: ./config-server
     container_name: config-server
     restart: unless-stopped
+    depends_on:
+      vault:
+        condition: service_healthy
     ports:
       - "8888:8888"
     environment:
       SPRING_CLOUD_CONFIG_SERVER_GIT_URI: ${CONFIG_GIT_URI}
+      VAULT_TOKEN: ${VAULT_TOKEN}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     networks:
       - rapidocourier-net

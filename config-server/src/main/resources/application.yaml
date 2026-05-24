@@ -4,12 +4,22 @@ spring:
   cloud:
     config:
       server:
-        git:
-          uri: ${SPRING_CLOUD_CONFIG_SERVER_GIT_URI:https://github.com/Shiar-owo/Rapido-Curier-Configs}
-          default-label: main
-          search-paths: /
-          timeout: 10
-          force-pull: true
+        composite:
+          - type: git
+            uri: ${SPRING_CLOUD_CONFIG_SERVER_GIT_URI:https://github.com/Shiar-owo/Rapido-Curier-Configs}
+            default-label: main
+            search-paths: /
+            timeout: 10
+            force-pull: true
+          - type: vault
+            host: vault
+            port: 8200
+            scheme: http
+            backend: secret/rapidocourier
+            kv-version: 2
+            authentication: TOKEN
+            token: ${VAULT_TOKEN}
+            default-key: application
 
 server:
   port: 8888
