@@ -10,9 +10,12 @@ import com.rapidocurier.clientsservice.domain.model.ReniecDataClient;
 import com.rapidocurier.clientsservice.domain.port.out.ClienteRepositoryPort;
 import com.rapidocurier.clientsservice.domain.port.out.ReniecPort;
 
+import org.springframework.stereotype.Service;
+
 import java.util.List;
 import java.util.UUID;
 
+@Service
 public class ClienteService implements RegistrarClienteUseCase, ConsultarClienteUseCase {
 
     private final ClienteRepositoryPort repositoryPort;
