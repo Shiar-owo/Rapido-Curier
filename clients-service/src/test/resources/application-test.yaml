@@ -8,6 +8,11 @@ spring:
   flyway:
     enabled: false
 
+reniec:
+  api:
+    url: http://localhost:9999
+    token: test-token
+
 resilience4j:
   circuitbreaker:
     instances:
