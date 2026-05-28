@@ -131,14 +131,28 @@ services:
       timeout: 5s
       retries: 10
 
-  # ── Microservicios de negocio ────────────────────────────────────────────────
+  # ── API Gateway (punto de entrada único) ──────────────────────────────────────
+
+  api-gateway:
+    build: ./api-gateway
+    container_name: api-gateway
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - rapidocourier-net
+
+  # ── Microservicios de negocio (sin puertos host, solo red interna) ────────────
 
   auth-service:
     build: ./auth-service
     container_name: auth-service
     restart: unless-stopped
-    ports:
-      - "8081:8081"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       DB_HOST: postgres-auth
@@ -156,8 +170,6 @@ services:
     build: ./clients-service
     container_name: clients-service
     restart: unless-stopped
-    ports:
-      - "8082:8082"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       DB_HOST: postgres-clientes
