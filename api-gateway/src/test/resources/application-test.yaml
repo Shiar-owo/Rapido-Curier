@@ -1,0 +1,9 @@
+spring:
+  application:
+    name: api-gateway
+
+server:
+  port: 0
+
+jwt:
+  secret: test-secret-key-test-secret-key-test-secret-key
