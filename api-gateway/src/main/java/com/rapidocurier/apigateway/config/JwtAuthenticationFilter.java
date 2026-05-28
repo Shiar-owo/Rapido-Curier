@@ -1,5 +1,8 @@
 package com.rapidocurier.apigateway.config;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.rapidocurier.apigateway.infrastructure.common.ApiResponse;
+
 import io.jsonwebtoken.Claims;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -7,13 +10,17 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletRequestWrapper;
 import jakarta.servlet.http.HttpServletResponse;
 
-import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
 import org.springframework.web.filter.OncePerRequestFilter;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.Enumeration;
 import java.util.List;
@@ -22,9 +29,11 @@ import java.util.List;
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
     private final JwtService jwtService;
+    private final ObjectMapper objectMapper;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
+    public JwtAuthenticationFilter(JwtService jwtService, ObjectMapper objectMapper) {
         this.jwtService = jwtService;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -41,7 +50,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         String token = extractToken(request);
 
         if (token == null) {
-            response.sendError(HttpStatus.UNAUTHORIZED.value(), "Token JWT requerido");
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            objectMapper.writeValue(response.getWriter(), ApiResponse.error("Token JWT requerido"));
             return;
         }
 
@@ -49,6 +61,16 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Claims claims = jwtService.validarToken(token);
             String userId = claims.getSubject();
             String roles = claims.get("roles", String.class);
+
+            var authorities = new ArrayList<SimpleGrantedAuthority>();
+            if (roles != null) {
+                Arrays.stream(roles.split(","))
+                    .map(String::trim)
+                    .forEach(r -> authorities.add(new SimpleGrantedAuthority("ROLE_" + r)));
+            }
+
+            var authentication = new UsernamePasswordAuthenticationToken(userId, null, authorities);
+            SecurityContextHolder.getContext().setAuthentication(authentication);
 
             HttpServletRequestWrapper wrappedRequest = new HttpServletRequestWrapper(request) {
                 @Override
@@ -81,7 +103,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             filterChain.doFilter(wrappedRequest, response);
 
         } catch (JwtService.JwtTokenInvalidoException e) {
-            response.sendError(HttpStatus.UNAUTHORIZED.value(), e.getMessage());
+            SecurityContextHolder.clearContext();
+            response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+            response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+            objectMapper.writeValue(response.getWriter(), ApiResponse.error(e.getMessage()));
+        } finally {
+            SecurityContextHolder.clearContext();
         }
     }
 
