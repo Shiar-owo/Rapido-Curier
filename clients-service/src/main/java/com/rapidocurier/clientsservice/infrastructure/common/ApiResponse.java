@@ -1,14 +1,19 @@
 package com.rapidocurier.clientsservice.infrastructure.common;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import io.swagger.v3.oas.annotations.media.Schema;
 
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 @JsonInclude(JsonInclude.Include.NON_NULL)
+@Schema(description = "Standard API response wrapper")
 public record ApiResponse<T>(
+        @Schema(description = "Indicates if the operation was successful")
         boolean success,
+        @Schema(description = "Response message")
         String message,
+        @Schema(description = "Response payload")
         T data
 ) {
     public static <T> ResponseEntity<ApiResponse<T>> ok(T data) {
