@@ -100,6 +100,8 @@ services:
     depends_on:
       vault:
         condition: service_healthy
+      eureka-server:
+        condition: service_healthy
     ports:
       - "8888:8888"
     environment:
@@ -120,9 +122,6 @@ services:
     restart: unless-stopped
     ports:
       - "8761:8761"
-    depends_on:
-      config-server:
-        condition: service_healthy
     networks:
       - rapidocourier-net
     healthcheck:
@@ -144,6 +143,8 @@ services:
     depends_on:
       eureka-server:
         condition: service_healthy
+      config-server:
+        condition: service_healthy
     networks:
       - rapidocourier-net
 
@@ -162,6 +163,8 @@ services:
       postgres-auth:
         condition: service_healthy
       eureka-server:
+        condition: service_healthy
+      config-server:
         condition: service_healthy
     networks:
       - rapidocourier-net
