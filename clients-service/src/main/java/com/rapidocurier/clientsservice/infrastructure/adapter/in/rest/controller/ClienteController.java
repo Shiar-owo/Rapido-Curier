@@ -7,6 +7,10 @@ import com.rapidocurier.clientsservice.infrastructure.adapter.in.rest.dto.reques
 import com.rapidocurier.clientsservice.infrastructure.adapter.in.rest.dto.response.ClienteResponse;
 import com.rapidocurier.clientsservice.infrastructure.common.ApiResponse;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 import org.springframework.http.ResponseEntity;
@@ -24,6 +28,7 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/clientes")
+@Tag(name = "Clients", description = "Client CRUD operations")
 public class ClienteController {
 
     private final RegistrarClienteUseCase registrarClienteUseCase;
@@ -37,6 +42,14 @@ public class ClienteController {
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @Operation(summary = "Create a client", description = "Creates a new client with DNI and email, enriched with RENIEC data")
+    @ApiResponses({
+        @ApiResponse(responseCode = "201", description = "Client created successfully"),
+        @ApiResponse(responseCode = "400", description = "Invalid input data"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or OPERADOR role"),
+        @ApiResponse(responseCode = "409", description = "Client already exists")
+    })
     public ResponseEntity<ApiResponse<ClienteResponse>> crear(
             @Valid @RequestBody ClienteRequest request) {
         Cliente cliente = registrarClienteUseCase.registrar(request.dni(), request.email());
@@ -45,6 +58,12 @@ public class ClienteController {
 
     @GetMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @Operation(summary = "List all clients", description = "Returns all registered clients")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "List of clients"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or OPERADOR role")
+    })
     public ResponseEntity<ApiResponse<List<ClienteResponse>>> listar() {
         List<ClienteResponse> clientes = consultarClienteUseCase.listarTodos().stream()
                 .map(ClienteResponse::fromDomain)
@@ -54,6 +73,13 @@ public class ClienteController {
 
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @Operation(summary = "Get client by ID", description = "Returns a single client by its UUID")
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "Client found"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or OPERADOR role"),
+        @ApiResponse(responseCode = "404", description = "Client not found")
+    })
     public ResponseEntity<ApiResponse<ClienteResponse>> obtener(@PathVariable UUID id) {
         Cliente cliente = consultarClienteUseCase.buscarPorId(id);
         return ApiResponse.ok(ClienteResponse.fromDomain(cliente));
@@ -61,6 +87,13 @@ public class ClienteController {
 
     @DeleteMapping("/{id}")
     @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Delete a client", description = "Deletes a client by its UUID. Only ADMIN can delete.")
+    @ApiResponses({
+        @ApiResponse(responseCode = "204", description = "Client deleted successfully"),
+        @ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN role"),
+        @ApiResponse(responseCode = "404", description = "Client not found")
+    })
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable UUID id) {
         consultarClienteUseCase.eliminar(id);
         return ApiResponse.noContent();
