@@ -30,7 +30,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command: ["/vault/scripts/init-vault.sh"]
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8200/v1/sys/health"]
+      test: ["CMD", "vault", "status", "-address=http://localhost:8200"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -115,6 +115,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+      start_period: 20s
 
   eureka-server:
     build: ./eureka-server
@@ -129,6 +130,7 @@ services:
       interval: 15s
       timeout: 5s
       retries: 10
+      start_period: 20s
 
   # ── API Gateway (punto de entrada único) ──────────────────────────────────────
 

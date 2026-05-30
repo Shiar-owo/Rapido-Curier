@@ -99,7 +99,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                         return Collections.enumeration(List.of(userId));
                     }
                     if ("X-User-Roles".equals(name)) {
-                        return Collections.enumeration(List.of(roles));
+                        return Collections.enumeration(roles != null ? List.of(roles) : List.of());
                     }
                     return super.getHeaders(name);
                 }
