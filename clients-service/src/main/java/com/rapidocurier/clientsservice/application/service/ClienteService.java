@@ -1,4 +1,4 @@
-package com.rapidocurier.clientsservice.application.service;
+    package com.rapidocurier.clientsservice.application.service;
 
 import com.rapidocurier.clientsservice.application.port.in.ConsultarClienteUseCase;
 import com.rapidocurier.clientsservice.application.port.in.RegistrarClienteUseCase;
@@ -11,6 +11,7 @@ import com.rapidocurier.clientsservice.domain.port.out.ClienteRepositoryPort;
 import com.rapidocurier.clientsservice.domain.port.out.ReniecPort;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.UUID;
@@ -27,6 +28,7 @@ public class ClienteService implements RegistrarClienteUseCase, ConsultarCliente
     }
 
     @Override
+    @Transactional
     public Cliente registrar(String dni, String email) {
         if (repositoryPort.buscarPorEmail(email).isPresent()) {
             throw new ConflictException("El email ya está registrado");

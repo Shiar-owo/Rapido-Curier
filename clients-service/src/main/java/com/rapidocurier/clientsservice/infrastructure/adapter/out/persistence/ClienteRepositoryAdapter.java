@@ -1,10 +1,12 @@
 package com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence;
 
+import com.rapidocurier.clientsservice.domain.exception.ConflictException;
 import com.rapidocurier.clientsservice.domain.model.Cliente;
 import com.rapidocurier.clientsservice.domain.port.out.ClienteRepositoryPort;
 import com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence.entity.ClienteEntity;
 import com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence.mapper.ClienteMapper;
 import com.rapidocurier.clientsservice.infrastructure.adapter.out.persistence.repository.ClienteJpaRepository;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -24,8 +26,12 @@ public class ClienteRepositoryAdapter implements ClienteRepositoryPort {
 
     @Override
     public Cliente guardar(Cliente cliente) {
-        ClienteEntity entity = mapper.toEntity(cliente);
-        return mapper.toDomain(repository.save(entity));
+        try {
+            ClienteEntity entity = mapper.toEntity(cliente);
+            return mapper.toDomain(repository.save(entity));
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflictException("El email o DNI ya está registrado");
+        }
     }
 
     @Override
