@@ -1,0 +1,16 @@
+spring:
+  application:
+    name: api-gateway
+  config:
+    import: ""
+  cloud:
+    vault:
+      enabled: false
+    config:
+      enabled: false
+
+server:
+  port: 0
+
+jwt:
+  secret: test-secret-key-test-secret-key-test-secret-key

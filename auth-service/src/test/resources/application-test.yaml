@@ -3,6 +3,13 @@ jwt:
   expiration: 3600000
 
 spring:
+  cloud:
+    vault:
+      enabled: false
+    config:
+      enabled: false
+  config:
+    import: ""
   datasource:
     url: jdbc:postgresql://localhost:5432/authdb
     username: postgres

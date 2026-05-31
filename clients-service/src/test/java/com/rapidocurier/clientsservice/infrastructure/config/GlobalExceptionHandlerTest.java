@@ -128,7 +128,7 @@ class GlobalExceptionHandlerTest {
         mockMvc.perform(get("/throw/generic"))
             .andExpect(status().isInternalServerError())
             .andExpect(jsonPath("$.success").value(false))
-            .andExpect(jsonPath("$.message").value("Error interno: Error inesperado"));
+            .andExpect(jsonPath("$.message").value("Error interno del servidor"));
     }
 
     @Test

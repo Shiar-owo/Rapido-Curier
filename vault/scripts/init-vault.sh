@@ -1,66 +1,34 @@
 #!/bin/sh
 set -e
 
-apk add --no-cache jq curl
-
-VAULT_ADDR="http://127.0.0.1:8200"
+VAULT_ADDR="http://vault:8200"
 export VAULT_ADDR
+export VAULT_TOKEN="dev-only-token"
 
-# Start Vault server in background
-echo "Starting Vault server..."
-vault server -config=/vault/config/dev-server.hcl &
-VAULT_PID=$!
-
-# Wait for Vault to be ready
 echo "Waiting for Vault to be ready..."
-until curl -s $VAULT_ADDR/v1/sys/health > /dev/null 2>&1; do
+until vault status -address=$VAULT_ADDR > /dev/null 2>&1; do
     sleep 2
 done
-echo "Vault ready!"
+echo "Vault is ready!"
 
-# Check if initialized
-STATUS=$(curl -s $VAULT_ADDR/v1/sys/health)
-if echo "$STATUS" | grep -q '"initialized":true'; then
-    echo "Vault already initialized."
-    if echo "$STATUS" | grep -q '"sealed":true'; then
-        if [ -f /vault/data/vault-credentials.env ]; then
-            . /vault/data/vault-credentials.env
-            vault operator unseal $VAULT_UNSEAL_KEY
-        else
-            echo "ERROR: Vault is initialized but /vault/data/vault-credentials.env does not exist!"
-            echo "Force unsealing is impossible. We must wait."
-        fi
-    fi
-else
-    echo "Initializing Vault..."
-    INIT_OUTPUT=$(vault operator init -key-shares=1 -key-threshold=1 -format=json)
-    UNSEAL_KEY=$(echo $INIT_OUTPUT | jq -r '.unseal_keys_b64[0]')
-    ROOT_TOKEN=$(echo $INIT_OUTPUT | jq -r '.root_token')
+# Enable KV v2 at secret/ path
+vault secrets enable -address=$VAULT_ADDR -path=secret kv-v2 2>/dev/null || true
 
-    echo "export VAULT_TOKEN=$ROOT_TOKEN" > /vault/data/vault-credentials.env
-    echo "export VAULT_UNSEAL_KEY=$UNSEAL_KEY" >> /vault/data/vault-credentials.env
+# Load secrets for auth-service
+vault kv put -address=$VAULT_ADDR secret/auth-service \
+    jwt.secret="contrasenia-super-mega-secreta-32-caracteres" \
+    jwt.expiration="86400000"
 
-    vault operator unseal $UNSEAL_KEY
-    echo "Vault initialized!"
+# Load secrets for clients-service
+vault kv put -address=$VAULT_ADDR secret/clients-service \
+    reniec.api.token="sk_14107.2R91IK9p8iH3dv0u5D7RJYgwDHgykbli"
 
-    # Inyectar el Token en la sesión actual del script para los comandos 'kv put'
-    export VAULT_TOKEN=$ROOT_TOKEN
-    sleep 2
-fi
+# Load secrets for api-gateway
+vault kv put -address=$VAULT_ADDR secret/api-gateway \
+    jwt.secret="contrasenia-super-mega-secreta-32-caracteres"
 
-# Enable KV and load secrets
-vault secrets enable -path=secret kv-v2 2>/dev/null || true
+# Load secrets for paquetes-service
+vault kv put -address=$VAULT_ADDR secret/paquetes-service \
+    jwt.secret="contrasenia-super-mega-secreta-32-caracteres"
 
-vault kv put secret/rapidocourier/auth-service \
-    spring.datasource.username="auth_user" spring.datasource.password="auth_pass" jwt.secret="contrasenia-super-mega-secreta-32-caracteres"
-
-vault kv put secret/rapidocourier/clients-service \
-    spring.datasource.username="clientes_user" spring.datasource.password="clientes_pass" reniec.api.token="sk_14107.2R91IK9p8iH3dv0u5D7RJYgwDHgykbli"
-
-vault kv put secret/rapidocourier/paquetes-service \
-    spring.datasource.username="paquetes_user" spring.datasource.password="paquetes_pass"
-
-echo "Secrets loaded!"
-
-# Wait for Vault process
-wait $VAULT_PID
+echo "All secrets loaded into Vault!"
