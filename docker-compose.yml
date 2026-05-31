@@ -18,22 +18,36 @@ services:
     container_name: vault
     restart: unless-stopped
     environment:
-      VAULT_ADDR: "http://127.0.0.1:8200"
-    volumes:
-      - ./vault:/vault
+      VAULT_DEV_ROOT_TOKEN_ID: dev-only-token
+      VAULT_DEV_LISTEN_ADDRESS: 0.0.0.0:8200
     ports:
       - "8200:8200"
     cap_add:
       - IPC_LOCK
     networks:
       - rapidocourier-net
-    entrypoint: ["/bin/sh", "-c"]
-    command: ["/vault/scripts/init-vault.sh"]
+    command: vault server -dev
     healthcheck:
       test: ["CMD", "vault", "status", "-address=http://localhost:8200"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  vault-init:
+    image: hashicorp/vault:1.15
+    container_name: vault-init
+    depends_on:
+      vault:
+        condition: service_healthy
+    environment:
+      VAULT_ADDR: "http://vault:8200"
+      VAULT_TOKEN: "dev-only-token"
+    volumes:
+      - ./vault/scripts:/vault/scripts
+    networks:
+      - rapidocourier-net
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["/vault/scripts/init-vault.sh"]
 
   # ── Bases de datos ─────────────────────────────────────────────────────────
 
@@ -98,15 +112,14 @@ services:
     container_name: config-server
     restart: unless-stopped
     depends_on:
-      vault:
-        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
       eureka-server:
         condition: service_healthy
     ports:
       - "8888:8888"
     environment:
       SPRING_CLOUD_CONFIG_SERVER_GIT_URI: ${CONFIG_GIT_URI}
-      VAULT_TOKEN: ${VAULT_TOKEN}
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
     networks:
       - rapidocourier-net
@@ -142,11 +155,14 @@ services:
       - "8080:8080"
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      VAULT_TOKEN: ${VAULT_TOKEN}
     depends_on:
       eureka-server:
         condition: service_healthy
       config-server:
         condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
     networks:
       - rapidocourier-net
 
@@ -158,6 +174,7 @@ services:
     restart: unless-stopped
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      VAULT_TOKEN: ${VAULT_TOKEN}
       DB_HOST: postgres-auth
       DB_USERNAME: auth_user
       DB_PASSWORD: auth_pass
@@ -168,6 +185,8 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
     networks:
       - rapidocourier-net
 
@@ -177,6 +196,7 @@ services:
     restart: unless-stopped
     environment:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      VAULT_TOKEN: ${VAULT_TOKEN}
       DB_HOST: postgres-clientes
       DB_USERNAME: clientes_user
       DB_PASSWORD: clientes_pass
@@ -187,5 +207,7 @@ services:
         condition: service_healthy
       config-server:
         condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
     networks:
       - rapidocourier-net

@@ -4,6 +4,13 @@ jwt:
 spring:
   application:
     name: clients-service
+  cloud:
+    vault:
+      enabled: false
+    config:
+      enabled: false
+  config:
+    import: ""
   jpa:
     hibernate:
       ddl-auto: create-drop
