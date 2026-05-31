@@ -5,6 +5,8 @@ import com.rapidocurier.clientsservice.domain.exception.ExternalServiceException
 import com.rapidocurier.clientsservice.domain.exception.ResourceNotFoundException;
 import com.rapidocurier.clientsservice.infrastructure.common.ApiResponse;
 
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -51,6 +53,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(ExternalServiceException.class)
     public ResponseEntity<ApiResponse<Void>> handleExternalService(ExternalServiceException ex) {
         return ApiResponse.error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
+    @ExceptionHandler(CallNotPermittedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleCircuitBreakerOpen(CallNotPermittedException ex) {
+        log.warn("Circuito abierto para RENIEC: {}", ex.getMessage());
+        return ApiResponse.error(HttpStatus.SERVICE_UNAVAILABLE, "RENIEC no disponible, intente más tarde");
     }
 
     @ExceptionHandler(AccessDeniedException.class)
