@@ -1,3 +1,13 @@
 spring:
   application:
     name: paquetes-service
+  config:
+    import: optional:configserver:http://config-server:8888,vault://
+  cloud:
+    vault:
+      uri: http://vault:8200
+      token: ${VAULT_TOKEN}
+      kv:
+        enabled: true
+        backend: secret
+        version: 2
