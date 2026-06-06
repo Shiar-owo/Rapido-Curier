@@ -5,6 +5,7 @@ import com.rapidocurier.paquetesservice.domain.model.Paquete;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public interface PaqueteRepositoryPort {
@@ -12,5 +13,6 @@ public interface PaqueteRepositoryPort {
     Optional<Paquete> buscarPorId(UUID id);
     List<Paquete> buscarPorCodigoRastreo(String texto);
     List<Paquete> buscarPorSucursalYEstado(String sucursal, EstadoPaquete estado);
+    List<Paquete> buscarPorRemitenteIdOrDestinatarioId(Set<UUID> clienteIds);
     void eliminar(UUID id);
 }
