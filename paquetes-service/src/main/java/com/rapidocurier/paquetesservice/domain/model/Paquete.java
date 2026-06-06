@@ -2,7 +2,6 @@ package com.rapidocurier.paquetesservice.domain.model;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -45,7 +44,7 @@ public class Paquete {
     public static Paquete create(UUID remitenteId, UUID destinatarioId,
                                  Double pesoKg, Double valorDeclarado,
                                  String sucursalOrigen, String sucursalDestino,
-                                 Double tarifa) {
+                                 Double tarifa, Set<Categoria> categorias) {
         OffsetDateTime now = OffsetDateTime.now();
         return new Paquete(
             UUID.randomUUID(),
@@ -55,7 +54,7 @@ public class Paquete {
             sucursalOrigen, sucursalDestino,
             tarifa,
             EstadoPaquete.REGISTRADO,
-            new HashSet<>(),
+            categorias,
             now, now
         );
     }
