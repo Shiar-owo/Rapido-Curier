@@ -1,7 +1,10 @@
 package com.rapidocurier.paquetesservice.domain.model;
 
+import com.rapidocurier.paquetesservice.domain.exception.ConflictException;
+
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.util.HashSet;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
@@ -45,6 +48,10 @@ public class Paquete {
                                  Double pesoKg, Double valorDeclarado,
                                  String sucursalOrigen, String sucursalDestino,
                                  Double tarifa, Set<Categoria> categorias) {
+        if (categorias == null || categorias.isEmpty()) {
+            throw new ConflictException("El paquete debe tener al menos una categoría");
+        }
+
         OffsetDateTime now = OffsetDateTime.now();
         return new Paquete(
             UUID.randomUUID(),
