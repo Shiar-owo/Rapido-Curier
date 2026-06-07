@@ -406,6 +406,76 @@ class PaqueteServiceTest {
 
         assertThrows(ConflictException.class,
             () -> service.asignarCategoria(paquete.getId(), categoriaBase.getId()));
-            verify(repo, never()).guardar(any());
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void buscarMisPaquetes_retornaListaDelCliente() {
+        UUID clienteId = UUID.randomUUID();
+        when(repo.buscarPorClienteId(clienteId)).thenReturn(List.of(paquete));
+
+        List<Paquete> result = service.buscarMisPaquetes(clienteId);
+
+        assertEquals(1, result.size());
+        assertEquals(paquete.getId(), result.get(0).getId());
+    }
+
+    @Test
+    void buscarMisPaquetes_sinPaquetes_retornaListaVacia() {
+        UUID clienteId = UUID.randomUUID();
+        when(repo.buscarPorClienteId(clienteId)).thenReturn(List.of());
+
+        List<Paquete> result = service.buscarMisPaquetes(clienteId);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_clienteEsRemitente_retornaHistorial() {
+        UUID clienteId = paquete.getRemitenteId();
+        List<EstadoHistorial> historialEsperado = List.of(
+            new EstadoHistorial(null, paquete.getId(), EstadoPaquete.REGISTRADO, OffsetDateTime.now(), "sistema")
+        );
+
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(historial.obtenerPorPaqueteId(paquete.getId())).thenReturn(historialEsperado);
+
+        List<EstadoHistorial> result = service.obtenerHistorialMisPaquetes(clienteId, paquete.getId());
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_clienteEsDestinatario_retornaHistorial() {
+        UUID clienteId = paquete.getDestinatarioId();
+        List<EstadoHistorial> historialEsperado = List.of(
+            new EstadoHistorial(null, paquete.getId(), EstadoPaquete.REGISTRADO, OffsetDateTime.now(), "sistema")
+        );
+
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(historial.obtenerPorPaqueteId(paquete.getId())).thenReturn(historialEsperado);
+
+        List<EstadoHistorial> result = service.obtenerHistorialMisPaquetes(clienteId, paquete.getId());
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_clienteNoEsPropietario_lanzaResourceNotFoundException() {
+        UUID clienteNoPropietario = UUID.randomUUID();
+
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> service.obtenerHistorialMisPaquetes(clienteNoPropietario, paquete.getId()));
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> service.obtenerHistorialMisPaquetes(UUID.randomUUID(), id));
     }
 }

@@ -2,6 +2,7 @@ package com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.controll
 
 import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.AsignarCategoriaUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.ConsultarMisPaquetesUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
@@ -27,6 +28,7 @@ import lombok.RequiredArgsConstructor;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -52,6 +54,7 @@ public class PaqueteController {
     private final ActualizarPaqueteUseCase actualizarUseCase;
     private final EliminarPaqueteUseCase eliminarUseCase;
     private final AsignarCategoriaUseCase asignarCategoriaUseCase;
+    private final ConsultarMisPaquetesUseCase consultarMisPaquetesUseCase;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
@@ -74,6 +77,39 @@ public class PaqueteController {
         );
         Paquete paquete = registrarUseCase.registrar(paqueteRequest);
         return ApiResponse.created(PaqueteResponse.fromDomain(paquete));
+    }
+
+    @GetMapping("/mis-paquetes")
+    @PreAuthorize("hasRole('CLIENTE')")
+    @Operation(summary = "Get my packages", description = "Returns all packages where the authenticated user is sender or recipient. Requires CLIENTE role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List of packages"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires CLIENTE role")
+    })
+    public ResponseEntity<ApiResponse<List<PaqueteResponse>>> misPaquetes() {
+        UUID clienteId = UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+        List<PaqueteResponse> paquetes = consultarMisPaquetesUseCase.buscarMisPaquetes(clienteId).stream()
+            .map(PaqueteResponse::fromDomain)
+            .toList();
+        return ApiResponse.ok(paquetes);
+    }
+
+    @GetMapping("/mis-paquetes/{id}/historial")
+    @PreAuthorize("hasRole('CLIENTE')")
+    @Operation(summary = "Get history of my package", description = "Returns the status history of a package owned by the authenticated user. Requires CLIENTE role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List of status changes"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires CLIENTE role"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Package not found or not owned by user")
+    })
+    public ResponseEntity<ApiResponse<List<EstadoHistorialResponse>>> misPaquetesHistorial(@PathVariable UUID id) {
+        UUID clienteId = UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+        List<EstadoHistorialResponse> historial = consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(clienteId, id).stream()
+            .map(EstadoHistorialResponse::fromDomain)
+            .toList();
+        return ApiResponse.ok(historial);
     }
 
     @GetMapping("/{id}")

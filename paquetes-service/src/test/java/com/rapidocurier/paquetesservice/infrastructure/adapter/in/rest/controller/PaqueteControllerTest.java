@@ -2,6 +2,7 @@ package com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.controll
 
 import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.AsignarCategoriaUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.ConsultarMisPaquetesUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
@@ -74,6 +75,9 @@ class PaqueteControllerTest {
 
     @MockitoBean
     private AsignarCategoriaUseCase asignarCategoriaUseCase;
+
+    @MockitoBean
+    private ConsultarMisPaquetesUseCase consultarMisPaquetesUseCase;
 
     @Configuration
     @EnableMethodSecurity
@@ -375,6 +379,86 @@ class PaqueteControllerTest {
 
         mockMvc.perform(post("/api/v1/paquetes/{id}/categorias/{categoriaId}", paqueteId, categoriaId))
             .andExpect(status().isConflict())
+            .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
+    void misPaquetes_happyPath_retorna200() throws Exception {
+        Paquete paquete = paqueteValido();
+        when(consultarMisPaquetesUseCase.buscarMisPaquetes(
+            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890")))
+            .thenReturn(List.of(paquete));
+
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    @Test
+    @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
+    void misPaquetes_sinPaquetes_retorna200Vacia() throws Exception {
+        when(consultarMisPaquetesUseCase.buscarMisPaquetes(
+            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890")))
+            .thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data.length()").value(0));
+    }
+
+    @Test
+    @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "ADMIN")
+    void misPaquetes_rolAdmin_retorna403() throws Exception {
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes"))
+            .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
+    void misPaquetesHistorial_happyPath_retorna200() throws Exception {
+        UUID paqueteId = UUID.randomUUID();
+        UUID clienteId = UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        List<EstadoHistorial> historial = List.of(
+            new EstadoHistorial(null, paqueteId, EstadoPaquete.REGISTRADO, OffsetDateTime.now(), "sistema")
+        );
+        when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(clienteId, paqueteId))
+            .thenReturn(historial);
+
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data.length()").value(1));
+    }
+
+    @Test
+    @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
+    void misPaquetesHistorial_paqueteNoExiste_retorna404() throws Exception {
+        UUID paqueteId = UUID.randomUUID();
+        when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(
+            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), paqueteId))
+            .thenThrow(new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
+    void misPaquetesHistorial_noEsPropietario_retorna404() throws Exception {
+        UUID paqueteId = UUID.randomUUID();
+        when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(
+            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), paqueteId))
+            .thenThrow(new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId))
+            .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.success").value(false));
     }
 }

@@ -30,4 +30,8 @@ public interface PaqueteJpaRepository extends JpaRepository<PaqueteEntity, UUID>
     @Transactional(readOnly = true)
     @Query("SELECT p FROM PaqueteEntity p WHERE p.remitenteId IN :ids OR p.destinatarioId IN :ids")
     List<PaqueteEntity> findByRemitenteIdOrDestinatarioId(@Param("ids") List<UUID> ids);
+
+    @Transactional(readOnly = true)
+    @Query("SELECT p FROM PaqueteEntity p WHERE p.remitenteId = :clienteId OR p.destinatarioId = :clienteId")
+    List<PaqueteEntity> findByClienteId(@Param("clienteId") UUID clienteId);
 }

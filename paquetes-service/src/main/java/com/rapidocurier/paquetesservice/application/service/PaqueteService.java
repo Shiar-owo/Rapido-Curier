@@ -2,6 +2,7 @@ package com.rapidocurier.paquetesservice.application.service;
 
 import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.AsignarCategoriaUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.ConsultarMisPaquetesUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
@@ -37,7 +38,8 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
                                        GestionarEstadoUseCase,
                                        ActualizarPaqueteUseCase,
                                        EliminarPaqueteUseCase,
-                                       AsignarCategoriaUseCase {
+                                       AsignarCategoriaUseCase,
+                                       ConsultarMisPaquetesUseCase {
 
     private final PaqueteRepositoryPort repo;
     private final HistorialRepositoryPort historial;
@@ -216,6 +218,23 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
         paquete.getCategorias().add(categoria);
         paquete.setUpdatedAt(OffsetDateTime.now());
         repo.guardar(paquete);
+    }
+
+    @Override
+    public List<Paquete> buscarMisPaquetes(UUID clienteId) {
+        return repo.buscarPorClienteId(clienteId);
+    }
+
+    @Override
+    public List<EstadoHistorial> obtenerHistorialMisPaquetes(UUID clienteId, UUID paqueteId) {
+        Paquete paquete = repo.buscarPorId(paqueteId)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        if (!paquete.getRemitenteId().equals(clienteId) && !paquete.getDestinatarioId().equals(clienteId)) {
+            throw new ResourceNotFoundException("Paquete no encontrado: " + paqueteId);
+        }
+
+        return historial.obtenerPorPaqueteId(paqueteId);
     }
 
     /**
