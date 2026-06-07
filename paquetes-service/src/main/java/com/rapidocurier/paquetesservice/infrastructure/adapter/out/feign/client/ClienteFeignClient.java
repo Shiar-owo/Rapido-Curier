@@ -1,6 +1,6 @@
 package com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.client;
 
-import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.ApiResponse;
+import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.FeignApiResponse;
 import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.ClienteResponse;
 
 import org.springframework.cloud.openfeign.FeignClient;
@@ -15,8 +15,8 @@ import java.util.UUID;
 public interface ClienteFeignClient {
 
     @GetMapping("/api/v1/clientes/{id}")
-    ApiResponse<ClienteResponse> obtenerPorId(@PathVariable UUID id);
+    FeignApiResponse<ClienteResponse> obtenerPorId(@PathVariable UUID id);
 
     @GetMapping("/api/v1/clientes/buscar")
-    ApiResponse<List<ClienteResponse>> buscarPorNombre(@RequestParam("nombre") String nombre);
+    FeignApiResponse<List<ClienteResponse>> buscarPorNombre(@RequestParam("nombre") String nombre);
 }

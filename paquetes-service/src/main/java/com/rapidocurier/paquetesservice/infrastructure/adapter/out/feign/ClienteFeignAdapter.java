@@ -5,7 +5,7 @@ import com.rapidocurier.paquetesservice.domain.exception.ResourceNotFoundExcepti
 import com.rapidocurier.paquetesservice.domain.model.ClienteReferencia;
 import com.rapidocurier.paquetesservice.domain.port.out.ClienteFeignPort;
 import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.client.ClienteFeignClient;
-import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.ApiResponse;
+import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.FeignApiResponse;
 import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.ClienteResponse;
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
@@ -34,7 +34,7 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
     @CircuitBreaker(name = CLIENTS_SERVICE, fallbackMethod = "obtenerClienteFallback")
     public ClienteReferencia obtenerCliente(UUID id) {
         try {
-            ApiResponse<ClienteResponse> response = feignClient.obtenerPorId(id);
+            FeignApiResponse<ClienteResponse> response = feignClient.obtenerPorId(id);
 
             if (!response.success() || response.data() == null) {
                 throw new ResourceNotFoundException("Cliente no encontrado: " + id);
@@ -54,7 +54,7 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
     @CircuitBreaker(name = CLIENTS_SERVICE, fallbackMethod = "buscarPorNombreFallback")
     public List<ClienteReferencia> buscarPorNombre(String nombre) {
         try {
-            ApiResponse<List<ClienteResponse>> response = feignClient.buscarPorNombre(nombre);
+            FeignApiResponse<List<ClienteResponse>> response = feignClient.buscarPorNombre(nombre);
 
             if (!response.success() || response.data() == null) {
                 return List.of();
