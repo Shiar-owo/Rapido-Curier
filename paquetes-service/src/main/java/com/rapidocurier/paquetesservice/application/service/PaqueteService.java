@@ -53,6 +53,8 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
     @Override
     @Transactional
     public Paquete registrar(PaqueteRequest request) {
+        validarClientesExistentes(request.remitenteId(), request.destinatarioId());
+
         if (request.categoriaIds() == null || request.categoriaIds().isEmpty()) {
             throw new ConflictException("El paquete debe tener al menos una categoría");
         }
@@ -64,6 +66,13 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
             categorias.add(cat);
         }
 
+        double tarifa = tarifaCalculator.calcular(
+            request.pesoKg(),
+            request.valorDeclarado(),
+            request.sucursalOrigen(),
+            request.sucursalDestino()
+        );
+
         Paquete paquete = Paquete.create(
             request.remitenteId(),
             request.destinatarioId(),
@@ -71,17 +80,9 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
             request.valorDeclarado(),
             request.sucursalOrigen(),
             request.sucursalDestino(),
-            0.0,
+            tarifa,
             categorias
         );
-
-        double tarifa = tarifaCalculator.calcular(
-            request.pesoKg(),
-            request.valorDeclarado(),
-            request.sucursalOrigen(),
-            request.sucursalDestino()
-        );
-        paquete.setTarifa(tarifa);
 
         Paquete guardado = repo.guardar(paquete);
 
@@ -153,5 +154,18 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
             .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
 
         return historial.obtenerPorPaqueteId(paqueteId);
+    }
+
+    /**
+     * Verifica que tanto el remitente como el destinatario existan en el sistema.
+     * Lanza {@link ResourceNotFoundException} si alguno de los dos no es encontrado.
+     *
+     * @param remitenteId  UUID del remitente
+     * @param destinatarioId UUID del destinatario
+     * @throws ResourceNotFoundException si el remitente o destinatario no existen
+     */
+    private void validarClientesExistentes(UUID remitenteId, UUID destinatarioId) {
+        clienteFeign.obtenerCliente(remitenteId);
+        clienteFeign.obtenerCliente(destinatarioId);
     }
 }
