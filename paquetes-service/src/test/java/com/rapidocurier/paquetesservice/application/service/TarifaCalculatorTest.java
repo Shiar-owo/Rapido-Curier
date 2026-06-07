@@ -1,7 +1,11 @@
 package com.rapidocurier.paquetesservice.application.service;
 
+import com.rapidocurier.paquetesservice.application.config.TarifaProperties;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -11,7 +15,16 @@ class TarifaCalculatorTest {
 
     @BeforeEach
     void setUp() {
-        calculator = new TarifaCalculator();
+        TarifaProperties props = new TarifaProperties();
+        props.setCostoPorKg(8.0);
+        props.setPorcentajeValorDeclarado(0.01);
+        props.setTarifaDefault(5.0);
+        props.setRutas(Map.of(
+            "LIMA-AREQUIPA", 15.0, "AREQUIPA-LIMA", 15.0,
+            "LIMA-CUSCO", 20.0, "CUSCO-LIMA", 20.0,
+            "AREQUIPA-CUSCO", 12.0, "CUSCO-AREQUIPA", 12.0
+        ));
+        calculator = new TarifaCalculator(props);
     }
 
     @Test
