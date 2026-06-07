@@ -110,4 +110,32 @@ class ClienteRepositoryAdapterTest {
 
         assertEquals(initialCount + 2, finalCount);
     }
+
+    @Test
+    void buscarPorNombre_porNombre_retornaCoincidencias() {
+        repository.guardar(Cliente.create("44444444", "Carlos", "Lopez", "Diaz", "carlos@test.com"));
+        repository.guardar(Cliente.create("77777777", "Maria", "Garcia", "Lopez", "maria2@test.com"));
+
+        java.util.List<Cliente> resultados = repository.buscarPorNombre("Carlos");
+
+        assertFalse(resultados.isEmpty());
+        assertTrue(resultados.stream().anyMatch(c -> c.getNombre().equals("Carlos")));
+    }
+
+    @Test
+    void buscarPorNombre_porApellidoPaterno_retornaCoincidencias() {
+        repository.guardar(Cliente.create("66666666", "Ana", "Torres", "Ruiz", "ana@test.com"));
+
+        java.util.List<Cliente> resultados = repository.buscarPorNombre("Torres");
+
+        assertFalse(resultados.isEmpty());
+        assertTrue(resultados.stream().anyMatch(c -> c.getApellidoPaterno().equals("Torres")));
+    }
+
+    @Test
+    void buscarPorNombre_noCoinincide_retornaListaVacia() {
+        java.util.List<Cliente> resultados = repository.buscarPorNombre("ZZZZZ");
+
+        assertTrue(resultados.isEmpty());
+    }
 }

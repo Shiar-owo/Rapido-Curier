@@ -12,5 +12,6 @@ public interface ClienteRepositoryPort {
     Optional<Cliente> buscarPorDni(String dni);
     Optional<Cliente> buscarPorEmail(String email);
     List<Cliente> listarTodos();
+    List<Cliente> buscarPorNombre(String nombre);
     void eliminar(UUID id);
 }

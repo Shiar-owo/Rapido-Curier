@@ -55,6 +55,14 @@ public class ClienteRepositoryAdapter implements ClienteRepositoryPort {
     }
 
     @Override
+    public List<Cliente> buscarPorNombre(String nombre) {
+        return repository
+            .findByNombreContainingIgnoreCaseOrApellidoPaternoContainingIgnoreCaseOrApellidoMaternoContainingIgnoreCase(
+                nombre, nombre, nombre)
+            .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
     public void eliminar(UUID id) {
         repository.deleteById(id);
     }
