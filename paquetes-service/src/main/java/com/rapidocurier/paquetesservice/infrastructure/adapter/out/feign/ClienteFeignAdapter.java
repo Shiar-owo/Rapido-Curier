@@ -9,6 +9,7 @@ import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.Fei
 import com.rapidocurier.paquetesservice.infrastructure.adapter.out.feign.dto.ClienteResponse;
 
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.retry.annotation.Retry;
 import feign.FeignException;
 
 import org.slf4j.Logger;
@@ -31,6 +32,7 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
     }
 
     @Override
+    @Retry(name = CLIENTS_SERVICE)
     @CircuitBreaker(name = CLIENTS_SERVICE, fallbackMethod = "obtenerClienteFallback")
     public ClienteReferencia obtenerCliente(UUID id) {
         try {
@@ -51,6 +53,7 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
     }
 
     @Override
+    @Retry(name = CLIENTS_SERVICE)
     @CircuitBreaker(name = CLIENTS_SERVICE, fallbackMethod = "buscarPorNombreFallback")
     public List<ClienteReferencia> buscarPorNombre(String nombre) {
         try {
