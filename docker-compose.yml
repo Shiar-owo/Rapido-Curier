@@ -176,8 +176,6 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       VAULT_TOKEN: ${VAULT_TOKEN}
       DB_HOST: postgres-auth
-      DB_USERNAME: auth_user
-      DB_PASSWORD: auth_pass
     depends_on:
       postgres-auth:
         condition: service_healthy
@@ -198,8 +196,6 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       VAULT_TOKEN: ${VAULT_TOKEN}
       DB_HOST: postgres-clientes
-      DB_USERNAME: clientes_user
-      DB_PASSWORD: clientes_pass
     depends_on:
       postgres-clientes:
         condition: service_healthy
@@ -220,8 +216,6 @@ services:
       EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
       VAULT_TOKEN: ${VAULT_TOKEN}
       DB_HOST: postgres-paquetes
-      DB_USERNAME: paquetes_user
-      DB_PASSWORD: paquetes_pass
     depends_on:
       postgres-paquetes:
         condition: service_healthy
