@@ -1,6 +1,7 @@
 package com.rapidocurier.paquetesservice.application.service;
 
 import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.AsignarCategoriaUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
@@ -35,7 +36,8 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
                                        ConsultarPaqueteUseCase,
                                        GestionarEstadoUseCase,
                                        ActualizarPaqueteUseCase,
-                                       EliminarPaqueteUseCase {
+                                       EliminarPaqueteUseCase,
+                                       AsignarCategoriaUseCase {
 
     private final PaqueteRepositoryPort repo;
     private final HistorialRepositoryPort historial;
@@ -196,6 +198,24 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
             throw new ResourceNotFoundException("Paquete no encontrado: " + id);
         }
         repo.eliminar(id);
+    }
+
+    @Override
+    @Transactional
+    public void asignarCategoria(UUID paqueteId, UUID categoriaId) {
+        Paquete paquete = repo.buscarPorId(paqueteId)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        Categoria categoria = categoriaRepo.buscarPorId(categoriaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
+
+        if (paquete.getCategorias().contains(categoria)) {
+            throw new ConflictException("La categoría '" + categoria.getNombre() + "' ya está asignada al paquete");
+        }
+
+        paquete.getCategorias().add(categoria);
+        paquete.setUpdatedAt(OffsetDateTime.now());
+        repo.guardar(paquete);
     }
 
     /**

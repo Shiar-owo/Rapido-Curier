@@ -365,4 +365,47 @@ class PaqueteServiceTest {
         assertThrows(ResourceNotFoundException.class, () -> service.eliminar(id));
         verify(repo, never()).eliminar(any());
     }
+
+    @Test
+    void asignarCategoria_happyPath_agregaCategoria() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+
+        Categoria nuevaCategoria = new Categoria(UUID.randomUUID(), "PELIGROSO", "Mercancía peligrosa");
+        when(categoriaRepo.buscarPorId(nuevaCategoria.getId())).thenReturn(Optional.of(nuevaCategoria));
+        when(repo.guardar(any(Paquete.class))).thenReturn(paquete);
+
+        service.asignarCategoria(paquete.getId(), nuevaCategoria.getId());
+
+        assertTrue(paquete.getCategorias().contains(nuevaCategoria));
+        verify(repo).guardar(paquete);
+    }
+
+    @Test
+    void asignarCategoria_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.asignarCategoria(id, UUID.randomUUID()));
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void asignarCategoria_categoriaNoExiste_lanzaResourceNotFoundException() {
+        UUID catId = UUID.randomUUID();
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(categoriaRepo.buscarPorId(catId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.asignarCategoria(paquete.getId(), catId));
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void asignarCategoria_categoriaYaAsignada_lanzaConflictException() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(categoriaRepo.buscarPorId(categoriaBase.getId())).thenReturn(Optional.of(categoriaBase));
+
+        assertThrows(ConflictException.class,
+            () -> service.asignarCategoria(paquete.getId(), categoriaBase.getId()));
+            verify(repo, never()).guardar(any());
+    }
 }

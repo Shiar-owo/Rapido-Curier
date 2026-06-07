@@ -1,6 +1,7 @@
 package com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.controller;
 
 import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.AsignarCategoriaUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
@@ -50,6 +51,7 @@ public class PaqueteController {
     private final GestionarEstadoUseCase gestionarEstadoUseCase;
     private final ActualizarPaqueteUseCase actualizarUseCase;
     private final EliminarPaqueteUseCase eliminarUseCase;
+    private final AsignarCategoriaUseCase asignarCategoriaUseCase;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
@@ -193,6 +195,23 @@ public class PaqueteController {
     })
     public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable UUID id) {
         eliminarUseCase.eliminar(id);
+        return ApiResponse.noContent();
+    }
+
+    @PostMapping("/{id}/categorias/{categoriaId}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @Operation(summary = "Assign category to package", description = "Adds a category to an existing package. Requires ADMIN or OPERADOR role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Category assigned successfully"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or OPERADOR role"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Package or category not found"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "409", description = "Category already assigned to package")
+    })
+    public ResponseEntity<ApiResponse<Void>> asignarCategoria(
+            @PathVariable UUID id,
+            @PathVariable UUID categoriaId) {
+        asignarCategoriaUseCase.asignarCategoria(id, categoriaId);
         return ApiResponse.noContent();
     }
 }

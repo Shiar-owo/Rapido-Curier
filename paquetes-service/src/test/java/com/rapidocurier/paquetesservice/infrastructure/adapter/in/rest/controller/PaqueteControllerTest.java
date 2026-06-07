@@ -1,6 +1,7 @@
 package com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.controller;
 
 import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.AsignarCategoriaUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
@@ -70,6 +71,9 @@ class PaqueteControllerTest {
 
     @MockitoBean
     private EliminarPaqueteUseCase eliminarUseCase;
+
+    @MockitoBean
+    private AsignarCategoriaUseCase asignarCategoriaUseCase;
 
     @Configuration
     @EnableMethodSecurity
@@ -335,6 +339,42 @@ class PaqueteControllerTest {
 
         mockMvc.perform(delete("/api/v1/paquetes/{id}", id))
             .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void asignarCategoria_happyPath_retorna200() throws Exception {
+        UUID paqueteId = UUID.randomUUID();
+        UUID categoriaId = UUID.randomUUID();
+
+        mockMvc.perform(post("/api/v1/paquetes/{id}/categorias/{categoriaId}", paqueteId, categoriaId))
+            .andExpect(status().isNoContent())
+            .andExpect(jsonPath("$.success").value(true));
+
+        verify(asignarCategoriaUseCase).asignarCategoria(paqueteId, categoriaId);
+    }
+
+    @Test
+    void asignarCategoria_paqueteNoExiste_retorna404() throws Exception {
+        UUID paqueteId = UUID.randomUUID();
+        UUID categoriaId = UUID.randomUUID();
+        doThrow(new ResourceNotFoundException("Paquete no encontrado: " + paqueteId))
+            .when(asignarCategoriaUseCase).asignarCategoria(paqueteId, categoriaId);
+
+        mockMvc.perform(post("/api/v1/paquetes/{id}/categorias/{categoriaId}", paqueteId, categoriaId))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void asignarCategoria_categoriaYaAsignada_retorna409() throws Exception {
+        UUID paqueteId = UUID.randomUUID();
+        UUID categoriaId = UUID.randomUUID();
+        doThrow(new ConflictException("La categoría ya está asignada al paquete"))
+            .when(asignarCategoriaUseCase).asignarCategoria(paqueteId, categoriaId);
+
+        mockMvc.perform(post("/api/v1/paquetes/{id}/categorias/{categoriaId}", paqueteId, categoriaId))
+            .andExpect(status().isConflict())
             .andExpect(jsonPath("$.success").value(false));
     }
 }
