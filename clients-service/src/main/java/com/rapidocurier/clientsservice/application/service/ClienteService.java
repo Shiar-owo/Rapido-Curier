@@ -62,6 +62,11 @@ public class ClienteService implements RegistrarClienteUseCase, ConsultarCliente
     }
 
     @Override
+    public List<Cliente> buscarPorNombre(String nombre) {
+        return repositoryPort.buscarPorNombre(nombre);
+    }
+
+    @Override
     public void eliminar(UUID id) {
         if (repositoryPort.buscarPorId(id).isEmpty()) {
             throw new ResourceNotFoundException("Cliente no encontrado");

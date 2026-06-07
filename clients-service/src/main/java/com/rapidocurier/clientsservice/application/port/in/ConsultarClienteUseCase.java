@@ -8,5 +8,6 @@ import java.util.UUID;
 public interface ConsultarClienteUseCase {
     Cliente buscarPorId(UUID id);
     List<Cliente> listarTodos();
+    List<Cliente> buscarPorNombre(String nombre);
     void eliminar(UUID id);
 }

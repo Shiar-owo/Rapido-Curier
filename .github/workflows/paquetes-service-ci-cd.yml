@@ -1,0 +1,40 @@
+name: CI/CD - Paquetes Service
+
+on:
+  push:
+    branches: [ main, develop, paquetes-service ]
+    paths:
+      - 'paquetes-service/**'
+  pull_request:
+    branches: [ main, develop, paquetes-service ]
+    paths:
+      - 'paquetes-service/**'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: paquetes-service
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+          cache: 'maven'
+
+      - name: Run tests
+        run: mvn test -B -U
+
+      - name: Build package
+        run: mvn package -DskipTests -B -U
+
+      - name: Build Docker image
+        run: |
+          docker build -t rapidocurier/paquetes-service:${{ github.sha }} .
+          docker build -t rapidocurier/paquetes-service:latest .

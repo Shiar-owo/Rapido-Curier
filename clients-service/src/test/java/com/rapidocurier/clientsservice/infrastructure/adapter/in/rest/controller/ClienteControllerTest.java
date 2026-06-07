@@ -209,4 +209,25 @@ class ClienteControllerTest {
         mockMvc.perform(delete("/api/v1/clientes/{id}", UUID.randomUUID()))
             .andExpect(status().isForbidden());
     }
+
+    @Test
+    void buscarPorNombre_conResultados_retorna200() throws Exception {
+        when(consultarClienteUseCase.buscarPorNombre("Juan")).thenReturn(List.of(clienteValido()));
+
+        mockMvc.perform(get("/api/v1/clientes/buscar").param("nombre", "Juan"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isArray())
+            .andExpect(jsonPath("$.data[0].dni").value("46027897"));
+    }
+
+    @Test
+    void buscarPorNombre_sinResultados_retorna200Vacio() throws Exception {
+        when(consultarClienteUseCase.buscarPorNombre("Inexistente")).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/v1/clientes/buscar").param("nombre", "Inexistente"))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data").isEmpty());
+    }
 }

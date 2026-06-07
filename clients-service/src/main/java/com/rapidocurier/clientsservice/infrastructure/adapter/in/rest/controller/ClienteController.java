@@ -70,6 +70,22 @@ public class ClienteController {
         return ApiResponse.ok(clientes);
     }
 
+    @GetMapping("/buscar")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @Operation(summary = "Search clients by name", description = "Returns clients matching the given name (partial match)")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List of matching clients"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or OPERADOR role")
+    })
+    public ResponseEntity<ApiResponse<List<ClienteResponse>>> buscarPorNombre(
+            @org.springframework.web.bind.annotation.RequestParam String nombre) {
+        List<ClienteResponse> clientes = consultarClienteUseCase.buscarPorNombre(nombre).stream()
+                .map(ClienteResponse::fromDomain)
+                .toList();
+        return ApiResponse.ok(clientes);
+    }
+
     @GetMapping("/{id}")
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
     @Operation(summary = "Get client by ID", description = "Returns a single client by its UUID")

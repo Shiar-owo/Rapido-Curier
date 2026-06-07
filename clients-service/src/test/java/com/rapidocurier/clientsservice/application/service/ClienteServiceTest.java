@@ -84,4 +84,24 @@ class ClienteServiceTest {
         assertThrows(ResourceNotFoundException.class,
             () -> service.eliminar(UUID.randomUUID()));
     }
+
+    @Test
+    void buscarPorNombre_conResultados_retornaLista() {
+        Cliente cliente = Cliente.create("12345678", "Juan", "Perez", "Gomez", "juan@test.com");
+        when(repositoryPort.buscarPorNombre("Juan")).thenReturn(List.of(cliente));
+
+        List<Cliente> result = service.buscarPorNombre("Juan");
+
+        assertEquals(1, result.size());
+        assertEquals("Juan", result.get(0).getNombre());
+    }
+
+    @Test
+    void buscarPorNombre_sinResultados_retornaListaVacia() {
+        when(repositoryPort.buscarPorNombre("Inexistente")).thenReturn(List.of());
+
+        List<Cliente> result = service.buscarPorNombre("Inexistente");
+
+        assertTrue(result.isEmpty());
+    }
 }

@@ -1,0 +1,28 @@
+spring:
+  application:
+    name: paquetes-service
+  autoconfigure:
+    exclude:
+      - org.springframework.cloud.vault.config.VaultConfigBootstrapConfiguration
+      - org.springframework.cloud.vault.config.config.DataVaultBootstrapConfiguration
+  cloud:
+    vault:
+      enabled: false
+    config:
+      enabled: false
+  config:
+    import: ""
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+  flyway:
+    enabled: false
+
+eureka:
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+
+server:
+  port: 0
