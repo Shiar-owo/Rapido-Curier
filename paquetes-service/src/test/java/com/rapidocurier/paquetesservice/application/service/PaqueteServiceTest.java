@@ -1,5 +1,6 @@
 package com.rapidocurier.paquetesservice.application.service;
 
+import com.rapidocurier.paquetesservice.application.port.in.PaqueteActualizarRequest;
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
 import com.rapidocurier.paquetesservice.domain.exception.ConflictException;
 import com.rapidocurier.paquetesservice.domain.exception.ResourceNotFoundException;
@@ -319,5 +320,49 @@ class PaqueteServiceTest {
 
         assertTrue(result.isEmpty());
         verify(repo, never()).buscarPorRemitenteIdOrDestinatarioId(any());
+    }
+
+    @Test
+    void actualizar_paqueteExiste_modificaYRecalculaTarifa() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(repo.guardar(any(Paquete.class))).thenReturn(paquete);
+        when(tarifaCalculator.calcular(7.5, 200.0, "LIMA", "AREQUIPA")).thenReturn(45.0);
+
+        PaqueteActualizarRequest request = new PaqueteActualizarRequest(7.5, 200.0, "LIMA", "AREQUIPA");
+        Paquete result = service.actualizar(paquete.getId(), request);
+
+        assertEquals(7.5, result.getPesoKg());
+        assertEquals(200.0, result.getValorDeclarado());
+        assertEquals(45.0, result.getTarifa());
+        verify(repo).guardar(paquete);
+    }
+
+    @Test
+    void actualizar_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        PaqueteActualizarRequest request = new PaqueteActualizarRequest(7.5, 200.0, null, null);
+
+        assertThrows(ResourceNotFoundException.class, () -> service.actualizar(id, request));
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void eliminar_paqueteExiste_elimina() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+
+        service.eliminar(paquete.getId());
+
+        verify(repo).eliminar(paquete.getId());
+    }
+
+    @Test
+    void eliminar_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.eliminar(id));
+        verify(repo, never()).eliminar(any());
     }
 }

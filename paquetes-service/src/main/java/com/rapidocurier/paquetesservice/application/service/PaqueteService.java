@@ -1,7 +1,10 @@
 package com.rapidocurier.paquetesservice.application.service;
 
+import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.PaqueteActualizarRequest;
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
 import com.rapidocurier.paquetesservice.application.port.in.RegistrarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.domain.exception.ConflictException;
@@ -30,7 +33,9 @@ import java.util.stream.Collectors;
 @Service
 public class PaqueteService implements RegistrarPaqueteUseCase,
                                        ConsultarPaqueteUseCase,
-                                       GestionarEstadoUseCase {
+                                       GestionarEstadoUseCase,
+                                       ActualizarPaqueteUseCase,
+                                       EliminarPaqueteUseCase {
 
     private final PaqueteRepositoryPort repo;
     private final HistorialRepositoryPort historial;
@@ -154,6 +159,43 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
             .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
 
         return historial.obtenerPorPaqueteId(paqueteId);
+    }
+
+    @Override
+    @Transactional
+    public Paquete actualizar(UUID id, PaqueteActualizarRequest request) {
+        Paquete paquete = repo.buscarPorId(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + id));
+
+        paquete.setPesoKg(request.pesoKg());
+        paquete.setValorDeclarado(request.valorDeclarado());
+
+        if (request.sucursalOrigen() != null) {
+            paquete.setSucursalOrigen(request.sucursalOrigen());
+        }
+        if (request.sucursalDestino() != null) {
+            paquete.setSucursalDestino(request.sucursalDestino());
+        }
+
+        double tarifa = tarifaCalculator.calcular(
+            paquete.getPesoKg(),
+            paquete.getValorDeclarado(),
+            paquete.getSucursalOrigen(),
+            paquete.getSucursalDestino()
+        );
+        paquete.setTarifa(tarifa);
+        paquete.setUpdatedAt(OffsetDateTime.now());
+
+        return repo.guardar(paquete);
+    }
+
+    @Override
+    @Transactional
+    public void eliminar(UUID id) {
+        if (!repo.buscarPorId(id).isPresent()) {
+            throw new ResourceNotFoundException("Paquete no encontrado: " + id);
+        }
+        repo.eliminar(id);
     }
 
     /**
