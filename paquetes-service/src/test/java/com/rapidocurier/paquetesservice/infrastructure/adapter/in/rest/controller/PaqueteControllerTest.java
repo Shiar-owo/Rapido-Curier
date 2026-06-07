@@ -1,7 +1,10 @@
 package com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.controller;
 
+import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.PaqueteActualizarRequest;
 import com.rapidocurier.paquetesservice.application.port.in.RegistrarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.domain.exception.ConflictException;
 import com.rapidocurier.paquetesservice.domain.exception.ResourceNotFoundException;
@@ -36,6 +39,7 @@ import java.util.UUID;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -60,6 +64,12 @@ class PaqueteControllerTest {
 
     @MockitoBean
     private GestionarEstadoUseCase gestionarEstadoUseCase;
+
+    @MockitoBean
+    private ActualizarPaqueteUseCase actualizarUseCase;
+
+    @MockitoBean
+    private EliminarPaqueteUseCase eliminarUseCase;
 
     @Configuration
     @EnableMethodSecurity
@@ -263,6 +273,67 @@ class PaqueteControllerTest {
             .thenThrow(new ResourceNotFoundException("Paquete no encontrado: " + id));
 
         mockMvc.perform(get("/api/v1/paquetes/{id}/historial", id))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void actualizar_paqueteValido_retorna200() throws Exception {
+        Paquete paquete = paqueteValido();
+        when(actualizarUseCase.actualizar(eq(paquete.getId()), any(PaqueteActualizarRequest.class)))
+            .thenReturn(paquete);
+
+        mockMvc.perform(put("/api/v1/paquetes/{id}", paquete.getId())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "pesoKg": 7.5,
+                        "valorDeclarado": 200.0,
+                        "sucursalOrigen": "LIMA",
+                        "sucursalDestino": "CUSCO"
+                    }
+                    """))
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.success").value(true))
+            .andExpect(jsonPath("$.data.id").value(paquete.getId().toString()));
+    }
+
+    @Test
+    void actualizar_paqueteNoExiste_retorna404() throws Exception {
+        UUID id = UUID.randomUUID();
+        when(actualizarUseCase.actualizar(eq(id), any(PaqueteActualizarRequest.class)))
+            .thenThrow(new ResourceNotFoundException("Paquete no encontrado: " + id));
+
+        mockMvc.perform(put("/api/v1/paquetes/{id}", id)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("""
+                    {
+                        "pesoKg": 7.5,
+                        "valorDeclarado": 200.0
+                    }
+                    """))
+            .andExpect(status().isNotFound())
+            .andExpect(jsonPath("$.success").value(false));
+    }
+
+    @Test
+    void eliminar_paqueteExiste_retorna204() throws Exception {
+        UUID id = UUID.randomUUID();
+
+        mockMvc.perform(delete("/api/v1/paquetes/{id}", id))
+            .andExpect(status().isNoContent())
+            .andExpect(jsonPath("$.success").value(true));
+
+        verify(eliminarUseCase).eliminar(id);
+    }
+
+    @Test
+    void eliminar_paqueteNoExiste_retorna404() throws Exception {
+        UUID id = UUID.randomUUID();
+        doThrow(new ResourceNotFoundException("Paquete no encontrado: " + id))
+            .when(eliminarUseCase).eliminar(id);
+
+        mockMvc.perform(delete("/api/v1/paquetes/{id}", id))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.success").value(false));
     }

@@ -1,7 +1,11 @@
 package com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.controller;
 
+import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.PaqueteActualizarRequest;
+import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
 import com.rapidocurier.paquetesservice.application.port.in.RegistrarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.domain.model.EstadoHistorial;
 import com.rapidocurier.paquetesservice.domain.model.EstadoPaquete;
@@ -18,8 +22,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.validation.Valid;
 
+import lombok.RequiredArgsConstructor;
+
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -34,20 +41,15 @@ import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/paquetes")
+@RequiredArgsConstructor
 @Tag(name = "Packages", description = "Package registration and tracking operations")
 public class PaqueteController {
 
     private final RegistrarPaqueteUseCase registrarUseCase;
     private final ConsultarPaqueteUseCase consultarUseCase;
     private final GestionarEstadoUseCase gestionarEstadoUseCase;
-
-    public PaqueteController(RegistrarPaqueteUseCase registrarUseCase,
-                             ConsultarPaqueteUseCase consultarUseCase,
-                             GestionarEstadoUseCase gestionarEstadoUseCase) {
-        this.registrarUseCase = registrarUseCase;
-        this.consultarUseCase = consultarUseCase;
-        this.gestionarEstadoUseCase = gestionarEstadoUseCase;
-    }
+    private final ActualizarPaqueteUseCase actualizarUseCase;
+    private final EliminarPaqueteUseCase eliminarUseCase;
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
@@ -62,7 +64,13 @@ public class PaqueteController {
     })
     public ResponseEntity<ApiResponse<PaqueteResponse>> registrar(
             @Valid @RequestBody PaqueteRegistrarRequest request) {
-        Paquete paquete = registrarUseCase.registrar(toUseCaseRequest(request));
+        PaqueteRequest paqueteRequest = new PaqueteRequest(
+            request.remitenteId(), request.destinatarioId(),
+            request.pesoKg(), request.valorDeclarado(),
+            request.sucursalOrigen(), request.sucursalDestino(),
+            request.categoriaIds()
+        );
+        Paquete paquete = registrarUseCase.registrar(paqueteRequest);
         return ApiResponse.created(PaqueteResponse.fromDomain(paquete));
     }
 
@@ -157,13 +165,34 @@ public class PaqueteController {
         return ApiResponse.ok(historial);
     }
 
-    private com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest toUseCaseRequest(
-            PaqueteRegistrarRequest req) {
-        return new com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest(
-            req.remitenteId(), req.destinatarioId(),
-            req.pesoKg(), req.valorDeclarado(),
-            req.sucursalOrigen(), req.sucursalDestino(),
-            req.categoriaIds()
-        );
+    @PutMapping("/{id}")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @Operation(summary = "Update package", description = "Updates package fields (weight, declared value, branches). Tariff is recalculated automatically.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Package updated successfully"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "400", description = "Invalid input data"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN or OPERADOR role"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Package not found")
+    })
+    public ResponseEntity<ApiResponse<PaqueteResponse>> actualizar(
+            @PathVariable UUID id,
+            @Valid @RequestBody PaqueteActualizarRequest request) {
+        Paquete paquete = actualizarUseCase.actualizar(id, request);
+        return ApiResponse.ok(PaqueteResponse.fromDomain(paquete));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Delete package", description = "Deletes a package. Requires ADMIN role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "204", description = "Package deleted successfully"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires ADMIN role"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Package not found")
+    })
+    public ResponseEntity<ApiResponse<Void>> eliminar(@PathVariable UUID id) {
+        eliminarUseCase.eliminar(id);
+        return ApiResponse.noContent();
     }
 }
