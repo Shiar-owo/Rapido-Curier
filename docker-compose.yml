@@ -211,3 +211,25 @@ services:
         condition: service_completed_successfully
     networks:
       - rapidocourier-net
+
+  paquetes-service:
+    build: ./paquetes-service
+    container_name: paquetes-service
+    restart: unless-stopped
+    environment:
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      VAULT_TOKEN: ${VAULT_TOKEN}
+      DB_HOST: postgres-paquetes
+      DB_USERNAME: paquetes_user
+      DB_PASSWORD: paquetes_pass
+    depends_on:
+      postgres-paquetes:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+      config-server:
+        condition: service_healthy
+      vault-init:
+        condition: service_completed_successfully
+    networks:
+      - rapidocourier-net
