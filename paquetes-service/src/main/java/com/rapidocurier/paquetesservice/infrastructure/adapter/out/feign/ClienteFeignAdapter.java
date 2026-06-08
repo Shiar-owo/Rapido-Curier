@@ -43,7 +43,8 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
             }
 
             ClienteResponse cr = response.data();
-            return new ClienteReferencia(cr.id(), cr.dni(), cr.nombre(), cr.email());
+            String fullName = (cr.nombre() + " " + cr.apellidoPaterno() + " " + cr.apellidoMaterno()).trim();
+            return new ClienteReferencia(cr.id(), cr.dni(), cr.nombre(), fullName, cr.email());
         } catch (FeignException.NotFound e) {
             throw new ResourceNotFoundException("Cliente no encontrado: " + id);
         } catch (FeignException e) {
@@ -64,7 +65,10 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
             }
 
             return response.data().stream()
-                .map(cr -> new ClienteReferencia(cr.id(), cr.dni(), cr.nombre(), cr.email()))
+                .map(cr -> {
+                    String fullName = (cr.nombre() + " " + cr.apellidoPaterno() + " " + cr.apellidoMaterno()).trim();
+                    return new ClienteReferencia(cr.id(), cr.dni(), cr.nombre(), fullName, cr.email());
+                })
                 .toList();
         } catch (FeignException e) {
             log.error("Error calling clients-service for buscarPorNombre: {}", e.getMessage());

@@ -15,5 +15,6 @@ public interface PaqueteRepositoryPort {
     List<Paquete> buscarPorSucursalYEstado(String sucursal, EstadoPaquete estado);
     List<Paquete> buscarPorRemitenteIdOrDestinatarioId(Set<UUID> clienteIds);
     List<Paquete> buscarPorClienteId(UUID clienteId);
+    List<Paquete> buscarPorCategoriaNombre(String nombreCategoria);
     void eliminar(UUID id);
 }

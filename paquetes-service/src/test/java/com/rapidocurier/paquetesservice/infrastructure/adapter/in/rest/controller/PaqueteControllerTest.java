@@ -16,6 +16,7 @@ import com.rapidocurier.paquetesservice.domain.model.EstadoHistorial;
 import com.rapidocurier.paquetesservice.domain.model.EstadoPaquete;
 import com.rapidocurier.paquetesservice.domain.model.Paquete;
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
+import com.rapidocurier.paquetesservice.domain.port.out.ClienteFeignPort;
 import com.rapidocurier.paquetesservice.infrastructure.config.GlobalExceptionHandler;
 
 import org.junit.jupiter.api.Test;
@@ -78,6 +79,9 @@ class PaqueteControllerTest {
 
     @MockitoBean
     private ConsultarMisPaquetesUseCase consultarMisPaquetesUseCase;
+
+    @MockitoBean
+    private ClienteFeignPort clienteFeignPort;
 
     @Configuration
     @EnableMethodSecurity

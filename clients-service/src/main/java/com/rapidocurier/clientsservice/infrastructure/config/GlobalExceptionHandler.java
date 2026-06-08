@@ -52,13 +52,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ExternalServiceException.class)
     public ResponseEntity<ApiResponse<Void>> handleExternalService(ExternalServiceException ex) {
-        return ApiResponse.error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+        return ApiResponse.error(HttpStatus.BAD_GATEWAY, ex.getMessage());
     }
 
     @ExceptionHandler(CallNotPermittedException.class)
     public ResponseEntity<ApiResponse<Void>> handleCircuitBreakerOpen(CallNotPermittedException ex) {
         log.warn("Circuito abierto para RENIEC: {}", ex.getMessage());
-        return ApiResponse.error(HttpStatus.SERVICE_UNAVAILABLE, "RENIEC no disponible, intente más tarde");
+        return ApiResponse.error(HttpStatus.BAD_GATEWAY, "RENIEC no disponible, intente más tarde");
     }
 
     @ExceptionHandler(AccessDeniedException.class)

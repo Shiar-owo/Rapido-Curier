@@ -22,6 +22,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
+// @Spy not used: all dependencies are mocked to fully isolate service logic.
+// No shared auxiliary component (e.g., TarifaCalculator) exists in clients-service
+// that would benefit from partial mocking via @Spy.
 class ClienteServiceTest {
 
     @Mock

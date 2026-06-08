@@ -34,4 +34,8 @@ public interface PaqueteJpaRepository extends JpaRepository<PaqueteEntity, UUID>
     @Transactional(readOnly = true)
     @Query("SELECT p FROM PaqueteEntity p WHERE p.remitenteId = :clienteId OR p.destinatarioId = :clienteId")
     List<PaqueteEntity> findByClienteId(@Param("clienteId") UUID clienteId);
+
+    @Transactional(readOnly = true)
+    @Query("SELECT DISTINCT p FROM PaqueteEntity p JOIN FETCH p.categorias c WHERE c.nombre = :nombreCategoria")
+    List<PaqueteEntity> findByCategoriaNombre(@Param("nombreCategoria") String nombreCategoria);
 }

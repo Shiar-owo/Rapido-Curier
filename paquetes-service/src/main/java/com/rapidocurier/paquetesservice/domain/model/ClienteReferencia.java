@@ -6,5 +6,6 @@ public record ClienteReferencia(
     UUID id,
     String dni,
     String nombre,
+    String nombreCompleto,
     String email
 ) {}

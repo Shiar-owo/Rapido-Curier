@@ -79,9 +79,9 @@ class PaqueteServiceTest {
         Categoria categoria = new Categoria(catId, "FRAGIL", "Artículo frágil");
 
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
         when(categoriaRepo.buscarPorId(catId)).thenReturn(Optional.of(categoria));
         when(tarifaCalculator.calcular(5.0, 100.0, "LIMA", "AREQUIPA")).thenReturn(27.0);
         when(repo.guardar(any(Paquete.class))).thenReturn(paquete);
@@ -132,7 +132,7 @@ class PaqueteServiceTest {
     @Test
     void registrar_destinatarioNoExiste_lanzaResourceNotFoundException() {
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId))
             .thenThrow(new ResourceNotFoundException("Cliente no encontrado: " + destinatarioId));
 
@@ -150,9 +150,9 @@ class PaqueteServiceTest {
     @Test
     void registrar_sinCategorias_lanzaConflictException() {
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
 
         PaqueteRequest request = new PaqueteRequest(
             remitenteId, destinatarioId,
@@ -168,9 +168,9 @@ class PaqueteServiceTest {
     @Test
     void registrar_categoriasNull_lanzaConflictException() {
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
 
         PaqueteRequest request = new PaqueteRequest(
             remitenteId, destinatarioId,
@@ -187,9 +187,9 @@ class PaqueteServiceTest {
     void registrar_categoriaNoExiste_lanzaResourceNotFoundException() {
         UUID catId = UUID.randomUUID();
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
         when(categoriaRepo.buscarPorId(catId)).thenReturn(Optional.empty());
 
         PaqueteRequest request = new PaqueteRequest(
@@ -302,7 +302,7 @@ class PaqueteServiceTest {
 
     @Test
     void buscarPorRemitenteOrDestinatario_conClientes_retornaPaquetes() {
-        ClienteReferencia cliente = new ClienteReferencia(remitenteId, "12345678", "Juan Pérez", "juan@test.com");
+        ClienteReferencia cliente = new ClienteReferencia(remitenteId, "12345678", "Juan Pérez", "Juan Pérez", "juan@test.com");
         when(clienteFeign.buscarPorNombre("Juan")).thenReturn(List.of(cliente));
         when(repo.buscarPorRemitenteIdOrDestinatarioId(Set.of(remitenteId))).thenReturn(List.of(paquete));
 

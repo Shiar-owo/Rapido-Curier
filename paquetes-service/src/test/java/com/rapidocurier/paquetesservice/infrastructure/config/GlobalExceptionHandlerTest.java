@@ -45,20 +45,20 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void externalServiceException_returns503() {
+    void externalServiceException_returns502() {
         var response = handler.handleExternalService(new ExternalServiceException("Error al consultar clients-service"));
 
-        assertEquals(503, response.getStatusCode().value());
+        assertEquals(502, response.getStatusCode().value());
         assertFalse(response.getBody().success());
     }
 
     @Test
-    void circuitBreakerException_returns503() {
+    void circuitBreakerException_returns502() {
         CircuitBreaker cb = CircuitBreaker.of("test", CircuitBreakerConfig.custom().build());
         CallNotPermittedException cbException = CallNotPermittedException.createCallNotPermittedException(cb);
         var response = handler.handleCircuitBreakerOpen(cbException);
 
-        assertEquals(503, response.getStatusCode().value());
+        assertEquals(502, response.getStatusCode().value());
         assertFalse(response.getBody().success());
     }
 

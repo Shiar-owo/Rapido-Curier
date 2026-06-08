@@ -19,8 +19,12 @@ public record PaqueteResponse(
     String codigoRastreo,
     @Schema(description = "Sender UUID")
     UUID remitenteId,
+    @Schema(description = "Sender full name from RENIEC (via clients-service)")
+    String remitenteNombre,
     @Schema(description = "Recipient UUID")
     UUID destinatarioId,
+    @Schema(description = "Recipient full name from RENIEC (via clients-service)")
+    String destinatarioNombre,
     @Schema(description = "Weight in kg", example = "5.5")
     Double pesoKg,
     @Schema(description = "Declared value", example = "150.0")
@@ -40,7 +44,7 @@ public record PaqueteResponse(
     @Schema(description = "Last update timestamp")
     OffsetDateTime updatedAt
 ) {
-    public static PaqueteResponse fromDomain(Paquete paquete) {
+    public static PaqueteResponse fromDomain(Paquete paquete, String remitenteNombre, String destinatarioNombre) {
         Set<CategoriaResponse> cats = paquete.getCategorias().stream()
             .map(c -> new CategoriaResponse(c.getId(), c.getNombre(), c.getDescripcion()))
             .collect(Collectors.toSet());
@@ -48,7 +52,9 @@ public record PaqueteResponse(
             paquete.getId(),
             paquete.getCodigoRastreo(),
             paquete.getRemitenteId(),
+            remitenteNombre,
             paquete.getDestinatarioId(),
+            destinatarioNombre,
             paquete.getPesoKg(),
             paquete.getValorDeclarado(),
             paquete.getSucursalOrigen(),

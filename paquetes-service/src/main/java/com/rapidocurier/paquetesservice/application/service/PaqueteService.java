@@ -136,6 +136,11 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
     }
 
     @Override
+    public List<Paquete> buscarPorCategoriaNombre(String nombreCategoria) {
+        return repo.buscarPorCategoriaNombre(nombreCategoria);
+    }
+
+    @Override
     @Transactional
     public void cambiarEstado(UUID paqueteId, EstadoPaquete nuevoEstado, String usuarioResponsable) {
         Paquete paquete = repo.buscarPorId(paqueteId)

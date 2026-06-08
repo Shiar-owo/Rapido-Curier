@@ -9,9 +9,11 @@ import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCa
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteActualizarRequest;
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
 import com.rapidocurier.paquetesservice.application.port.in.RegistrarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.domain.model.ClienteReferencia;
 import com.rapidocurier.paquetesservice.domain.model.EstadoHistorial;
 import com.rapidocurier.paquetesservice.domain.model.EstadoPaquete;
 import com.rapidocurier.paquetesservice.domain.model.Paquete;
+import com.rapidocurier.paquetesservice.domain.port.out.ClienteFeignPort;
 import com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.dto.request.CambiarEstadoRequest;
 import com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.dto.request.PaqueteRegistrarRequest;
 import com.rapidocurier.paquetesservice.infrastructure.adapter.in.rest.dto.response.EstadoHistorialResponse;
@@ -25,6 +27,7 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -42,6 +45,7 @@ import org.springframework.web.bind.annotation.RestController;
 import java.util.List;
 import java.util.UUID;
 
+@Slf4j
 @RestController
 @RequestMapping("/api/v1/paquetes")
 @RequiredArgsConstructor
@@ -55,6 +59,25 @@ public class PaqueteController {
     private final EliminarPaqueteUseCase eliminarUseCase;
     private final AsignarCategoriaUseCase asignarCategoriaUseCase;
     private final ConsultarMisPaquetesUseCase consultarMisPaquetesUseCase;
+    private final ClienteFeignPort clienteFeignPort;
+
+    private PaqueteResponse enrichWithClientNames(Paquete paquete) {
+        String remitenteNombre = null;
+        String destinatarioNombre = null;
+        try {
+            ClienteReferencia remitente = clienteFeignPort.obtenerCliente(paquete.getRemitenteId());
+            remitenteNombre = remitente.nombreCompleto();
+        } catch (Exception e) { log.warn("No se pudo obtener nombre del remitente {}: {}", paquete.getRemitenteId(), e.getMessage()); }
+        try {
+            ClienteReferencia destinatario = clienteFeignPort.obtenerCliente(paquete.getDestinatarioId());
+            destinatarioNombre = destinatario.nombreCompleto();
+        } catch (Exception e) { log.warn("No se pudo obtener nombre del destinatario {}: {}", paquete.getDestinatarioId(), e.getMessage()); }
+        return PaqueteResponse.fromDomain(paquete, remitenteNombre, destinatarioNombre);
+    }
+
+    private List<PaqueteResponse> enrichAll(List<Paquete> paquetes) {
+        return paquetes.stream().map(this::enrichWithClientNames).toList();
+    }
 
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
@@ -76,7 +99,7 @@ public class PaqueteController {
             request.categoriaIds()
         );
         Paquete paquete = registrarUseCase.registrar(paqueteRequest);
-        return ApiResponse.created(PaqueteResponse.fromDomain(paquete));
+        return ApiResponse.created(enrichWithClientNames(paquete));
     }
 
     @GetMapping("/mis-paquetes")
@@ -89,9 +112,7 @@ public class PaqueteController {
     })
     public ResponseEntity<ApiResponse<List<PaqueteResponse>>> misPaquetes() {
         UUID clienteId = UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
-        List<PaqueteResponse> paquetes = consultarMisPaquetesUseCase.buscarMisPaquetes(clienteId).stream()
-            .map(PaqueteResponse::fromDomain)
-            .toList();
+        List<PaqueteResponse> paquetes = enrichAll(consultarMisPaquetesUseCase.buscarMisPaquetes(clienteId));
         return ApiResponse.ok(paquetes);
     }
 
@@ -122,7 +143,7 @@ public class PaqueteController {
     })
     public ResponseEntity<ApiResponse<PaqueteResponse>> buscarPorId(@PathVariable UUID id) {
         Paquete paquete = consultarUseCase.buscarPorId(id);
-        return ApiResponse.ok(PaqueteResponse.fromDomain(paquete));
+        return ApiResponse.ok(enrichWithClientNames(paquete));
     }
 
     @GetMapping("/buscar")
@@ -134,9 +155,7 @@ public class PaqueteController {
     })
     public ResponseEntity<ApiResponse<List<PaqueteResponse>>> buscarPorCodigoRastreo(
             @RequestParam String texto) {
-        List<PaqueteResponse> paquetes = consultarUseCase.buscarPorCodigoRastreo(texto).stream()
-            .map(PaqueteResponse::fromDomain)
-            .toList();
+        List<PaqueteResponse> paquetes = enrichAll(consultarUseCase.buscarPorCodigoRastreo(texto));
         return ApiResponse.ok(paquetes);
     }
 
@@ -150,9 +169,7 @@ public class PaqueteController {
     public ResponseEntity<ApiResponse<List<PaqueteResponse>>> buscarPorSucursalYEstado(
             @PathVariable String sucursal,
             @PathVariable EstadoPaquete estado) {
-        List<PaqueteResponse> paquetes = consultarUseCase.buscarPorSucursalYEstado(sucursal, estado).stream()
-            .map(PaqueteResponse::fromDomain)
-            .toList();
+        List<PaqueteResponse> paquetes = enrichAll(consultarUseCase.buscarPorSucursalYEstado(sucursal, estado));
         return ApiResponse.ok(paquetes);
     }
 
@@ -165,9 +182,20 @@ public class PaqueteController {
     })
     public ResponseEntity<ApiResponse<List<PaqueteResponse>>> buscarPorRemitenteOrDestinatario(
             @RequestParam String nombre) {
-        List<PaqueteResponse> paquetes = consultarUseCase.buscarPorRemitenteOrDestinatario(nombre).stream()
-            .map(PaqueteResponse::fromDomain)
-            .toList();
+        List<PaqueteResponse> paquetes = enrichAll(consultarUseCase.buscarPorRemitenteOrDestinatario(nombre));
+        return ApiResponse.ok(paquetes);
+    }
+
+    @GetMapping("/por-categoria")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @Operation(summary = "Search packages by category name", description = "Returns packages that have the given category, using a JPQL JOIN between Paquete and Categoria entities")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "List of matching packages"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized")
+    })
+    public ResponseEntity<ApiResponse<List<PaqueteResponse>>> buscarPorCategoria(
+            @RequestParam String nombre) {
+        List<PaqueteResponse> paquetes = enrichAll(consultarUseCase.buscarPorCategoriaNombre(nombre));
         return ApiResponse.ok(paquetes);
     }
 
@@ -217,7 +245,7 @@ public class PaqueteController {
             @PathVariable UUID id,
             @Valid @RequestBody PaqueteActualizarRequest request) {
         Paquete paquete = actualizarUseCase.actualizar(id, request);
-        return ApiResponse.ok(PaqueteResponse.fromDomain(paquete));
+        return ApiResponse.ok(enrichWithClientNames(paquete));
     }
 
     @DeleteMapping("/{id}")

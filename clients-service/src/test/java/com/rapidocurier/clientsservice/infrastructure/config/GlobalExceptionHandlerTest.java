@@ -108,9 +108,9 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-    void externalServiceException_retorna503() throws Exception {
+    void externalServiceException_retorna502() throws Exception {
         mockMvc.perform(get("/throw/external-service"))
-            .andExpect(status().isServiceUnavailable())
+            .andExpect(status().isBadGateway())
             .andExpect(jsonPath("$.success").value(false))
             .andExpect(jsonPath("$.message").value("RENIEC no disponible"));
     }
