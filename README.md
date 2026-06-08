@@ -9,20 +9,21 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 1. [Cómo Ejecutar](#1-cómo-ejecutar)
 2. [Eureka Dashboard](#2-eureka-dashboard)
 3. [Pruebas y Documentación](#3-pruebas-y-documentación)
-4. [Mapa de Microservicios](#4-mapa-de-microservicios)
-5. [Arquitectura General](#5-arquitectura-general)
-6. [Dependencias entre Servicios](#6-dependencias-entre-servicios)
-7. [Modelo de Datos por Servicio](#7-modelo-de-datos-por-servicio)
-8. [Justificación de Bases de Datos](#8-justificación-de-bases-de-datos)
-9. [Justificación de Arquitectura Interna](#9-justificación-de-arquitectura-interna)
-10. [Regla de Cálculo de Tarifa (RF-03)](#10-regla-de-cálculo-de-tarifa-rf-03)
-11. [Estados y Transiciones del Paquete (RF-04)](#11-estados-y-transiciones-del-paquete-rf-04)
-12. [Comunicación Inter-Servicio](#12-comunicación-inter-servicio)
-13. [Seguridad y JWT](#13-seguridad-y-jwt)
-14. [Gestión de Secretos con Vault](#14-gestión-de-secretos-con-vault)
-15. [Circuit Breaker y Resiliencia](#15-circuit-breaker-y-resiliencia)
-16. [Hot Reload de Configuración](#16-hot-reload-de-configuración)
-17. [Pruebas Unitarias](#17-pruebas-unitarias)
+4. [CI/CD con GitHub Actions](#4-cicd-con-github-actions)
+5. [Mapa de Microservicios](#5-mapa-de-microservicios)
+6. [Arquitectura General](#6-arquitectura-general)
+7. [Dependencias entre Servicios](#7-dependencias-entre-servicios)
+8. [Modelo de Datos por Servicio](#8-modelo-de-datos-por-servicio)
+9. [Justificación de Bases de Datos](#9-justificación-de-bases-de-datos)
+10. [Justificación de Arquitectura Interna](#10-justificación-de-arquitectura-interna)
+11. [Regla de Cálculo de Tarifa (RF-03)](#11-regla-de-cálculo-de-tarifa-rf-03)
+12. [Estados y Transiciones del Paquete (RF-04)](#12-estados-y-transiciones-del-paquete-rf-04)
+13. [Comunicación Inter-Servicio](#13-comunicación-inter-servicio)
+14. [Seguridad y JWT](#14-seguridad-y-jwt)
+15. [Gestión de Secretos con Vault](#15-gestión-de-secretos-con-vault)
+16. [Circuit Breaker y Resiliencia](#16-circuit-breaker-y-resiliencia)
+17. [Hot Reload de Configuración](#17-hot-reload-de-configuración)
+18. [Pruebas Unitarias](#18-pruebas-unitarias)
 
 ---
 
@@ -119,7 +120,31 @@ cd paquetes-service && mvn test    # 131 tests
 
 ---
 
-## 4. Mapa de Microservicios
+## 4. CI/CD con GitHub Actions
+
+Se utiliza **GitHub Actions** como alternativa a Jenkins por las siguientes razones:
+
+| Criterio | GitHub Actions | Jenkins |
+|----------|---------------|---------|
+| Configuración | YAML en el repositorio | Interfaz web + scripts Groovy |
+| Mantenimiento | Sin servidor que administrar | Requiere servidor dedicado |
+| Integración con GitHub | Nativa (triggers, secrets, permissions) | Requiere plugins adicionales |
+| Costo | 2000 min/mes gratis | Infraestructura propia |
+
+### Workflows por servicio
+
+| Workflow | Disparador | Acciones |
+|----------|-----------|----------|
+| `auth-service-ci-cd.yml` | push/PR a main + path `auth-service/**` | Test → Build → Docker image |
+| `clients-service-ci-cd.yml` | push/PR a main + path `clients-service/**` | Test → Build → Docker image |
+| `paquetes-service-ci-cd.yml` | push/PR a main + path `paquetes-service/**` | Test → Build → Docker image |
+| `api-gateway-ci-cd.yml` | push/PR a main + path `api-gateway/**` | Test → Build → Docker image |
+
+Cada workflow se ejecuta **solo** cuando cambian archivos de su servicio (path filter), evitando builds innecesarios.
+
+---
+
+## 5. Mapa de Microservicios
 
 | Servicio | Bounded Context | Entidades | RF Implementados | BD | Comunicación |
 |----------|----------------|-----------|-----------------|-----|-------------|
@@ -138,7 +163,7 @@ cd paquetes-service && mvn test    # 131 tests
 
 ---
 
-## 5. Arquitectura General
+## 6. Arquitectura General
 
 ```
                         ┌──────────────────┐
@@ -175,7 +200,7 @@ cd paquetes-service && mvn test    # 131 tests
 
 ---
 
-## 6. Dependencias entre Servicios
+## 7. Dependencias entre Servicios
 
 | Servicio Origen | Servicio Destino | Tipo | Protocolo | Descripción |
 |----------------|-----------------|------|-----------|-------------|
@@ -192,7 +217,7 @@ cd paquetes-service && mvn test    # 131 tests
 
 ---
 
-## 7. Modelo de Datos por Servicio
+## 8. Modelo de Datos por Servicio
 
 ### auth-service (`rapidocourier_auth`)
 
@@ -267,7 +292,7 @@ cd paquetes-service && mvn test    # 131 tests
 
 ---
 
-## 8. Justificación de Bases de Datos
+## 9. Justificación de Bases de Datos
 
 | Servicio | BD | Justificación |
 |----------|-----|---------------|
@@ -279,7 +304,7 @@ cd paquetes-service && mvn test    # 131 tests
 
 ---
 
-## 9. Justificación de Arquitectura Interna
+## 10. Justificación de Arquitectura Interna
 
 Todos los servicios de negocio siguen **Arquitectura Hexagonal (Ports & Adapters)**:
 
@@ -306,7 +331,7 @@ HTTP Request → Controller (adapter in) → UseCase (port in) → Service → R
 
 ---
 
-## 10. Regla de Cálculo de Tarifa (RF-03)
+## 11. Regla de Cálculo de Tarifa (RF-03)
 
 La tarifa se calcula automáticamente al registrar un paquete:
 
@@ -345,7 +370,7 @@ tarifa = (5 × 8.0) + (1000 × 0.01) + 20.0
 
 ---
 
-## 11. Estados y Transiciones del Paquete (RF-04)
+## 12. Estados y Transiciones del Paquete (RF-04)
 
 ### Estados
 
@@ -385,7 +410,7 @@ Una transición inválida retorna **409 Conflict** con mensaje descriptivo indic
 
 ---
 
-## 12. Comunicación Inter-Servicio
+## 13. Comunicación Inter-Servicio
 
 ### Tipo: Sincrónica (Feign Client)
 
@@ -418,7 +443,7 @@ El Gateway propaga `X-User-Id` y `X-User-Roles` como headers HTTP reales. Paquet
 
 ---
 
-## 13. Seguridad y JWT
+## 14. Seguridad y JWT
 
 ### Estrategia: JWT Validado Solo en el Gateway
 
@@ -461,7 +486,7 @@ Al arrancar auth-service, se crean automáticamente:
 
 ---
 
-## 14. Gestión de Secretos con Vault
+## 15. Gestión de Secretos con Vault
 
 Vault corre en **modo desarrollo** con token `dev-only-token`. Los secretos se almacenan en KV v2:
 
@@ -485,7 +510,7 @@ Vault ← vault-init (contenedor) ← init-vault.sh
 
 ---
 
-## 15. Circuit Breaker y Resiliencia
+## 16. Circuit Breaker y Resiliencia
 
 ### Configuración en paquetes-service
 
@@ -529,7 +554,7 @@ docker exec paquetes-service wget -qO- http://localhost:8083/actuator/circuitbre
 
 ---
 
-## 16. Hot Reload de Configuración
+## 17. Hot Reload de Configuración
 
 La tarifa del paquete (`TarifaProperties`) es hot-reloadable con `@RefreshScope`:
 
@@ -553,7 +578,7 @@ curl -s http://localhost:8080/api/v1/paquetes/buscar?texto=RC \
 
 ---
 
-## 17. Pruebas Unitarias
+## 18. Pruebas Unitarias
 
 | Servicio | Archivo | Tipo | Tests | Cobertura |
 |----------|---------|------|-------|-----------|
