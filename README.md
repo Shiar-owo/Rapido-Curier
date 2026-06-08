@@ -76,7 +76,7 @@ curl http://localhost:8761/eureka/apps
 
 ## 2. Eureka Dashboard
 
-El dashboard de Eureka está disponible en `http://localhost:8761`. Muestra todos los servicios registrados en estado `UP`:
+El dashboard de Eureka está disponible en **http://localhost:8761**. Muestra todos los servicios registrados en estado `UP`:
 
 | Aplicación | Instancias | Estado |
 |-----------|-----------|--------|
@@ -107,8 +107,7 @@ El archivo [`examples.md`](examples.md) contiene 42 casos de prueba que cubren t
 ![Swagger UI](imagenes/Swagger-UI.png)
 
 La documentación OpenAPI está disponible en:
-- Swagger UI: `http://localhost:8080/swagger-ui.html`
-- JSON: `http://localhost:8080/v3/api-docs`
+- **Swagger UI:** http://localhost:8080/swagger-ui.html
 
 ### Pruebas Unitarias
 
