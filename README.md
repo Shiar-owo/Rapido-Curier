@@ -1,626 +1,607 @@
-# RapidoCourier - Microservicios
+# RapidoCourier — Sistema de Microservicios
 
 Plataforma de mensajería y paquetería basada en microservicios con Spring Boot, arquitectura hexagonal y despliegue Docker.
 
-## Stack Tecnológico
+---
 
-| Componente | Tecnología |
-|---|---|
-| Lenguaje | Java 17 |
-| Framework | Spring Boot 4.0.6 |
-| Cloud | Spring Cloud 2025.1.1 |
-| BD | PostgreSQL 16 |
-| Migraciones | Flyway |
-| Mapeo | MapStruct |
-| Seguridad | JWT (jjwt 0.12.5), BCrypt |
-| Documentación | OpenAPI 3.x |
-| Testing | JUnit 5, Mockito, Testcontainers |
-| Infraestructura | Docker, Eureka, Config Server, Vault |
+## Tabla de Contenidos
 
-## Arquitectura General
+1. [Mapa de Microservicios](#1-mapa-de-microservicios)
+2. [Arquitectura General](#2-arquitectura-general)
+3. [Dependencias entre Servicios](#3-dependencias-entre-servicios)
+4. [Modelo de Datos por Servicio](#4-modelo-de-datos-por-servicio)
+5. [Justificación de Bases de Datos](#5-justificación-de-bases-de-datos)
+6. [Justificación de Arquitectura Interna](#6-justificación-de-arquitectura-interna)
+7. [Regla de Cálculo de Tarifa (RF-03)](#7-regla-de-cálculo-de-tarifa-rf-03)
+8. [Estados y Transiciones del Paquete (RF-04)](#8-estados-y-transiciones-del-paquete-rf-04)
+9. [Comunicación Inter-Servicio](#9-comunicación-inter-servicio)
+10. [Seguridad y JWT](#10-seguridad-y-jwt)
+11. [Gestión de Secretos con Vault](#11-gestión-de-secretos-con-vault)
+12. [Circuit Breaker y Resiliencia](#12-circuit-breaker-y-resiliencia)
+13. [Instrucciones de Levantamiento](#13-instrucciones-de-levantamiento)
+14. [Eureka Dashboard](#14-eureka-dashboard)
+15. [Hot Reload de Configuración](#15-hot-reload-de-configuración)
+16. [Pruebas Unitarias](#16-pruebas-unitarias)
 
-```
-                         ┌─────────────┐
-                         │   Vault     │ (secretos)
-                         │   :8200     │
-                         └──────┬──────┘
-                                │
-┌──────────────┐     ┌──────────▼─────────┐     ┌────────────────┐
-│   Git Repo   │────▶│   Config Server    │────▶│  Eureka Server │
-│   (configs)  │     │      :8888         │     │    :8761       │
-└──────────────┘     └──────────┬──────────┘     └────────────────┘
-                                │
-         ┌──────────────────────┼──────────────────────┐
-         │                      │                      │
-         ▼                      ▼                      ▼
-┌──────────────────┐  ┌──────────────────┐  ┌─────────────────────┐
-│   auth-service   │  │ clients-service  │  │   paquetes-service  │
-│     :8081        │  │     :8082        │  │     :8083           │
-│  PostgreSQL      │  │  PostgreSQL      │  │  PostgreSQL         │
-│  rapidocourier_  │  │ rapidocourier_   │  │ rapidocourier_      │
-│  auth            │  │ clientes         │  │ paquetes            │
-└──────────────────┘  └────────┬─────────┘  └─────────────────────┘
-                               │
-                               ▼
-                      ┌──────────────────┐
-                      │   RENIEC API     │
-                      │ (Feign + CB)     │
-                      └──────────────────┘
-```
+---
 
-## Estructura del Proyecto
+## 1. Mapa de Microservicios
+
+| Servicio | Bounded Context | Entidades | RF Implementados | BD | Comunicación |
+|----------|----------------|-----------|-----------------|-----|-------------|
+| **auth-service** | Autenticación y autorización | `Usuario`, `Rol` | RF-08 (roles) | PostgreSQL `rapidocourier_auth` | Ninguna |
+| **clients-service** | Gestión de clientes | `Cliente` | RF-01 (registro con RENIEC), RF-08 (roles) | PostgreSQL `rapidocourier_clientes` | Llama a RENIEC API (Feign + Circuit Breaker) |
+| **paquetes-service** | Envíos y tracking | `Paquete`, `Categoria`, `HistorialEstado` | RF-02, RF-03, RF-04, RF-05, RF-06, RF-07, RF-09 | PostgreSQL `rapidocourier_paquetes` | Llama a clients-service vía Feign (verificar clientes, obtener nombres) |
+
+### Servicios de Infraestructura
+
+| Servicio | Puerto | Función |
+|----------|--------|---------|
+| **api-gateway** | `8080` | Punto de entrada único, JWT validation, enrutamiento |
+| **eureka-server** | `8761` | Service Discovery |
+| **config-server** | `8888` | Configuración centralizada (Git backend) |
+| **vault** | `8200` | Gestión de secretos (JWT, RENIEC, DB credentials) |
+
+---
+
+## 2. Arquitectura General
 
 ```
-RapidoCurier/
-├── docker-compose.yml           # Orquestación completa
-├── .env                         # Variables de entorno
-├── config-server/               # Config Server (Git-backed)
-├── eureka-server/               # Service Discovery
-├── api-gateway/                 # API Gateway (en desarrollo)
-├── auth-service/                # Autenticación y usuarios
-├── clients-service/             # Gestión de clientes
-├── vault/                       # Configuración de Vault
-│   ├── config/dev-server.hcl
-│   └── scripts/init-vault.sh
-└── .github/workflows/           # CI/CD pipelines
-    ├── auth-service-ci-cd.yml
-    └── clients-service-ci-cd.yml
+                        ┌──────────────────┐
+                        │     Vault        │
+                        │    :8200         │
+                        │  (secrets/kv)    │
+                        └────────┬─────────┘
+                                 │ lectura de secretos
+┌──────────────┐    ┌────────────▼──────────┐
+│   Git Repo   │───▶│    Config Server      │
+│ (configs)    │    │       :8888           │
+└──────────────┘    └────────────┬──────────┘
+                                 │
+┌────────────────────────────────▼─────────────────────────────────┐
+│                        Eureka Server :8761                       │
+│              (Service Discovery — todos se registran)            │
+└──────┬────────────┬───────────────┬──────────────────┬───────────┘
+       │            │               │                  │
+       ▼            ▼               ▼                  ▼
+┌────────────┐ ┌────────────┐ ┌────────────┐   ┌────────────┐
+│    API     │ │    auth    │ │  clients   │   │  paquetes  │
+│  Gateway   │ │  service   │ │  service   │   │  service   │
+│   :8080    │ │   :8081    │ │   :8082    │   │   :8083    │
+└─────┬──────┘ └────────────┘ └─────┬──────┘   └─────┬──────┘
+      │                             │                 │
+      │ JWT validado aquí           │                 │ Feign ──▶ clients-service
+      │ Headers propagados:         │ Feign ──▶       │          (verificar clientes,
+      │ X-User-Id, X-User-Roles     │ RENIEC API      │           obtener nombres)
+      │                             │ (+ CB + Retry)  │
+      │                             │                 │
+      └──── Solo los clientes ──────┘─────────────────┘
+           interactúan vía el Gateway
 ```
 
 ---
 
-## 1. config-server
+## 3. Dependencias entre Servicios
 
-Servidor de configuración centralizada que lee desde un repositorio Git.
+| Servicio Origen | Servicio Destino | Tipo | Protocolo | Descripción |
+|----------------|-----------------|------|-----------|-------------|
+| **api-gateway** | **auth-service** | Sincrónica | HTTP/REST | Proxy de rutas |
+| **api-gateway** | **clients-service** | Sincrónica | HTTP/REST | Proxy de rutas |
+| **api-gateway** | **paquetes-service** | Sincrónica | HTTP/REST | Proxy de rutas |
+| **clients-service** | **RENIEC API** | Sincrónica | HTTP/REST (Feign) | Consulta DNI para registro de clientes |
+| **paquetes-service** | **clients-service** | Sincrónica | HTTP/REST (Feign) | Verificar existencia de remitente/destinatario al registrar paquete; obtener nombres completos para enriquecer respuestas |
+| **auth-service** | **Vault** | Sincrónica | HTTP | Lee `jwt.secret` al arrancar |
+| **clients-service** | **Vault** | Sincrónica | HTTP | Lee `reniec.api.token`, DB credentials |
+| **paquetes-service** | **Vault** | Sincrónica | HTTP | Lee `jwt.secret`, DB credentials |
+| **Todos los servicios** | **Config Server** | Sincrónica | HTTP | Obtienen configuración centralizada |
+| **Todos los servicios** | **Eureka Server** | Sincrónica | HTTP | Registro y descubrimiento |
 
-| Propiedad | Valor |
-|-----------|-------|
-| Puerto | `8888` |
-| Spring Boot | 4.0.6 |
-| Spring Cloud | 2025.1.1 |
-| Backend | Git (`https://github.com/Shiar-owo/Rapido-Curier-Configs`) |
+---
 
-### Endpoints
-- `GET /{application}/{profile}` — Obtener configuración
-- `GET /actuator/health` — Health check
+## 4. Modelo de Datos por Servicio
 
-### Configuración destacada
-```yaml
-# config-server/src/main/resources/application.yaml
-spring.cloud.config.server.git.uri: ${CONFIG_GIT_URI}
-spring.cloud.config.server.git.default-label: main
+### auth-service (`rapidocourier_auth`)
+
+```
+┌─────────────────┐      ┌──────────────────┐      ┌─────────────────┐
+│     roles        │      │  usuario_roles    │      │    usuarios      │
+├─────────────────┤      ├──────────────────┤      ├─────────────────┤
+│ id UUID (PK)    │◀─────│ usuario_id UUID  │─────▶│ id UUID (PK)    │
+│ nombre VARCHAR  │      │ rol_id UUID      │      │ nombre VARCHAR  │
+│    (20) UNIQUE  │      │    (composite PK)│      │ password VARCHAR│
+└─────────────────┘      └──────────────────┘      │ email VARCHAR   │
+                                                   │   (100) UNIQUE  │
+                                                   └─────────────────┘
 ```
 
-### Seguridad
-Acceso público (permitAll).
+### clients-service (`rapidocourier_clientes`)
 
-### Dockerfile
-```dockerfile
-FROM eclipse-temurin:17-jre-alpine
-RUN apk add --no-cache git
-COPY target/*.jar app.jar
-EXPOSE 8888
+```
+┌─────────────────────────────────┐
+│           clientes               │
+├─────────────────────────────────┤
+│ id UUID (PK)                    │
+│ dni VARCHAR(8) UNIQUE           │
+│ nombre VARCHAR(100)             │
+│ apellido_paterno VARCHAR(100)   │
+│ apellido_materno VARCHAR(100)   │
+│ email VARCHAR(255) UNIQUE       │
+│ created_at TIMESTAMPTZ          │
+│ updated_at TIMESTAMPTZ          │
+└─────────────────────────────────┘
+  Índices: dni, email
+```
+
+### paquetes-service (`rapidocourier_paquetes`)
+
+```
+┌──────────────────┐    ┌──────────────────────┐    ┌──────────────────┐
+│    categorias     │    │   paquete_categoria   │    │     paquetes      │
+├──────────────────┤    ├──────────────────────┤    ├──────────────────┤
+│ id UUID (PK)     │◀───│ paquete_id UUID (FK) │───▶│ id UUID (PK)     │
+│ nombre VARCHAR   │    │ categoria_id UUID(FK)│    │ codigo_rastreo   │
+│   (100) UNIQUE   │    │    (composite PK)    │    │   VARCHAR(20)    │
+│ descripcion      │    └──────────────────────┘    │   UNIQUE         │
+│   VARCHAR(255)   │                                │ remitente_id UUID│
+└──────────────────┘                                │ destinatario_id  │
+                                                    │ peso_kg DOUBLE   │
+                                                    │ valor_declarado  │
+                                                    │ sucursal_origen  │
+                                                    │ sucursal_destino │
+                                                    │ tarifa DOUBLE    │
+                                                    │ estado_actual    │
+                                                    │ created_at       │
+                                                    │ updated_at       │
+                                                    └────────┬─────────┘
+                                                             │
+                                              ┌──────────────▼──────────────┐
+                                              │      historial_estado        │
+                                              ├─────────────────────────────┤
+                                              │ id UUID (PK)                │
+                                              │ paquete_id UUID (FK)        │
+                                              │ estado VARCHAR(30)          │
+                                              │ fecha_cambio TIMESTAMPTZ    │
+                                              │ usuario_responsable VARCHAR │
+                                              └─────────────────────────────┘
+```
+
+**Índices:** `codigo_rastreo`, `remitente_id`, `destinatario_id`, `estado_actual`, `historial_estado(paquete_id)`
+
+**Relaciones:**
+- `paquete_categoria`: `@ManyToMany` con tabla intermedia explícita (RF-09)
+- `historial_estado → paquetes`: `@ManyToOne` / `@OneToMany`
+
+---
+
+## 5. Justificación de Bases de Datos
+
+| Servicio | BD | Justificación |
+|----------|-----|---------------|
+| **auth-service** | PostgreSQL 16 | Relacional simple (usuarios, roles, N:M). Transacciones ACID para operaciones de autenticación. UUIDs como PKs. |
+| **clients-service** | PostgreSQL 16 | Datos estructurados con restricciones UNIQUE (DNI, email). Necesita índices B-tree para búsquedas por nombre. JPA Auditing con `OffsetDateTime`. |
+| **paquetes-service** | PostgreSQL 16 | Modelo relacional con `@ManyToMany` (categorías), `@OneToMany` (historial). Consultas JPQL complejas con JOIN FETCH. Transacciones para registro de paquete + historial atómico. |
+
+**Decisión:** Se usa PostgreSQL de forma políglota (una BD por servicio) para garantizar independencia de datos y escalabilidad independiente. Cada BD tiene su propio contenedor Docker sin exposición al host, accesible solo dentro de la red `rapidocourier-net`.
+
+---
+
+## 6. Justificación de Arquitectura Interna
+
+Todos los servicios de negocio siguen **Arquitectura Hexagonal (Ports & Adapters)**:
+
+```
+HTTP Request → Controller (adapter in) → UseCase (port in) → Service → RepositoryPort (port out) → RepositoryAdapter (adapter out) → JPA
+```
+
+### Por qué Hexagonal:
+
+1. **Separación de concerns:** El dominio no depende de frameworks ni infraestructura.
+2. **Testeabilidad:** Los puertos de entrada se prueban con mocks de puertos de salida; sin arrancar Spring.
+3. **Cambios de infraestructura:** Cambiar de JPA a MongoDB solo implica crear un nuevo adapter de salida, sin tocar la lógica de negocio.
+4. **Consistencia:** Todos los servicios usan la misma estructura, facilitando el mantenimiento.
+
+### Paquetes comunes:
+
+- `domain/model/` — Entidades de dominio con constructores privados y factory methods
+- `domain/port/in/` — Puertos de entrada (use cases)
+- `domain/port/out/` — Puertos de salida (repositorios, Feign clients)
+- `application/service/` — Implementación de use cases
+- `infrastructure/adapter/in/rest/` — Controladores, DTOs, mappers
+- `infrastructure/adapter/out/` — Implementaciones de puertos de salida (JPA, Feign)
+- `infrastructure/config/` — Configuración de seguridad, auditoría, excepciones
+
+---
+
+## 7. Regla de Cálculo de Tarifa (RF-03)
+
+La tarifa se calcula automáticamente al registrar un paquete:
+
+```
+tarifa_total = (pesoKg × costoPorKg) + (valorDeclarado × porcentajeValor) + tarifaRuta
+```
+
+### Parámetros (configurables vía Config Server, hot-reloadable con `@RefreshScope`):
+
+| Parámetro | Valor por defecto | Descripción |
+|-----------|-------------------|-------------|
+| `tarifa.costoPorKg` | `8.0` S/./kg | Costo por kilogramo |
+| `tarifa.porcentajeValorDeclarado` | `0.01` (1%) | Porcentaje del valor declarado |
+| `tarifa.tarifaDefault` | `5.0` S/. | Tarifa base para rutas no definidas |
+
+### Recargos por ruta:
+
+| Ruta | Recargo (S/.) |
+|------|---------------|
+| LIMA → AREQUIPA | 15.0 |
+| AREQUIPA → LIMA | 15.0 |
+| LIMA → CUSCO | 20.0 |
+| CUSCO → LIMA | 20.0 |
+| AREQUIPA → CUSCO | 12.0 |
+| CUSCO → AREQUIPA | 12.0 |
+
+### Ejemplo:
+
+Paquete de **5 kg**, valor declarado **S/. 1000**, de LIMA a CUSCO:
+
+```
+tarifa = (5 × 8.0) + (1000 × 0.01) + 20.0
+       = 40.0 + 10.0 + 20.0
+       = S/. 70.00
 ```
 
 ---
 
-## 2. eureka-server
+## 8. Estados y Transiciones del Paquete (RF-04)
 
-Servicio de descubrimiento (Service Discovery).
+### Estados
 
-| Propiedad | Valor |
-|-----------|-------|
-| Puerto | `8761` |
-| Spring Boot | 3.5.14 |
-| Spring Cloud | 2025.0.2 |
+| Estado | Descripción |
+|--------|-------------|
+| `REGISTRADO` | Paquete recién creado por un operador |
+| `EN_ALMACEN` | Almacenado en la sucursal de origen |
+| `EN_TRANSITO` | En tránsito entre sucursales |
+| `EN_REPARTO` | En reparto al destinatario final |
+| `ENTREGADO` | Entregado exitosamente **(estado terminal)** |
+| `NO_ENTREGADO` | Intento de entrega fallido |
 
-### Endpoints
-- `GET /` — Dashboard Eureka
-- `GET /eureka/apps` — Listar instancias registradas
-- `GET /actuator/health` — Health check
+### Diagrama de Transiciones
 
-### Configuración destacada
-```yaml
-# eureka-server/src/main/resources/application.yaml
-eureka.client.register-with-eureka: false
-eureka.client.fetch-registry: false
-eureka.server.enable-self-preservation: false
+```
+REGISTRADO ──▶ EN_ALMACEN ──▶ EN_TRANSITO ──▶ EN_REPARTO ──▶ ENTREGADO
+                                   │               │
+                                   │               ▼
+                                   │         NO_ENTREGADO
+                                   │               │
+                                   └───────────────┘
+                                   (retorna a EN_ALMACEN)
 ```
 
-### Seguridad
-Recursos estáticos y Eureka dashboard públicos; demás endpoints autenticados.
+### Transiciones Válidas
 
-### Dockerfile
-```dockerfile
-FROM eclipse-temurin:17-jre-alpine
-COPY target/*.jar app.jar
-EXPOSE 8761
-```
+| Estado Actual | Siguiente Estado Permitido |
+|---------------|---------------------------|
+| `REGISTRADO` | `EN_ALMACEN` |
+| `EN_ALMACEN` | `EN_TRANSITO` |
+| `EN_TRANSITO` | `EN_REPARTO` |
+| `EN_REPARTO` | `ENTREGADO`, `NO_ENTREGADO` |
+| `NO_ENTREGADO` | `EN_ALMACEN` |
+| `ENTREGADO` | *(ninguno — terminal)* |
+
+Una transición inválida retorna **409 Conflict** con mensaje descriptivo indicando la transición intentada y las permitidas.
 
 ---
 
-## 3. api-gateway
+## 9. Comunicación Inter-Servicio
 
-API Gateway (en desarrollo inicial).
+### Tipo: Sincrónica (Feign Client)
 
-| Propiedad | Valor |
-|-----------|-------|
-| Puerto host | `8080` |
-| Spring Boot | 4.0.6 |
-| Spring Cloud | 2025.1.1 |
+Se eligió comunicación **sincrónica** para ambos flujos inter-servicio:
 
-### Estado actual
-- Esqueleto del proyecto creado
-- Sin rutas configuradas
-- Sin filtro JWT implementado
-- Sin Dockerfile
+1. **paquetes-service → clients-service** (Feign + Load Balancing vía Eureka)
+   - **Por qué sync:** El registro de paquete requiere verificar que remitente y destinatario existen **antes** de persistir. La integridad referencial entre servicios es crítica para el negocio.
+   - **Datos consultados:** UUID del cliente, nombre completo, DNI, email.
+   - **Resiliencia:** `@CircuitBreaker` + `@Retry` con backoff exponencial. Si clients-service no está disponible, el fallback lanza `ExternalServiceException` (502).
 
-### Pendiente
-- [ ] Configurar rutas hacia auth-service, clients-service, paquetes-service
-- [ ] Implementar filtro JWT centralizado
-- [ ] Propagar cabeceras `X-User-Id` y `X-User-Roles`
+2. **clients-service → RENIEC API** (Feign directo)
+   - **Por qué sync:** El nombre del cliente debe obtenerse de RENIEC en el momento del registro. No hay escenario donde se necesite diferir esta consulta.
+   - **Resiliencia:** `@CircuitBreaker` + `@Retry`. Si RENIEC falla, se retorna 502.
+
+### Decisión difícil de diseño
+
+La decisión más compleja fue **cómo enriquecer las respuestas de paquetes con nombres de clientes**. Las opciones eran:
+- **Opción A:** Replicar datos de clientes en la BD de paquetes (eventual consistency via eventos).
+- **Opción B:** Llamar a clients-service por cada consulta (N+1 problem).
+
+**Decisión:** Se eligió la **Opción B** (llamada por consulta) porque:
+- Evita la duplicación de datos y los problemas de consistencia.
+- Los paquetes típicamente tienen pocos resultados por consulta (1-20).
+- El circuit breaker protege de caídas en cascada.
+- Se encapsula en un helper `enrichWithClientNames()` que falla silenciosamente si clients-service no está disponible.
+
+### Headers de Trazabilidad
+
+El Gateway propaga `X-User-Id` y `X-User-Roles` como headers HTTP reales. Paquetes-service los reenvía en llamadas Feign a clients-service vía `FeignAuthInterceptor`.
 
 ---
 
-## 4. auth-service
+## 10. Seguridad y JWT
 
-Servicio de autenticación y gestión de usuarios.
+### Estrategia: JWT Validado Solo en el Gateway
 
-| Propiedad | Valor |
-|-----------|-------|
-| Puerto | `8081` |
-| Base de datos | `rapidocourier_auth` |
-| Spring Boot | 4.0.6 |
-| Spring Cloud | 2025.1.1 |
-| Arquitectura | Hexagonal (Ports & Adapters) |
+El JWT se valida **exclusivamente** en el API Gateway (`JwtAuthenticationFilter`). Los servicios de negocio reciben headers `X-User-Id` y `X-User-Roles` pre-validados.
 
-### Estructura de paquetes
+**Por qué centralizar en el Gateway:**
+- Evita duplicar la lógica de validación JWT en cada servicio.
+- Los servicios solo necesitan un filtro de headers simples (`HeaderAuthenticationFilter`).
+- El secreto JWT está en Vault, accesible solo por el Gateway.
+
+### Flujo de Autenticación
 
 ```
-auth-service/
-└── src/main/java/com/rapidocourier/authservice/
-    ├── domain/
-    │   ├── model/
-    │   │   ├── Usuario.java
-    │   │   └── RolNombre.java          # ADMIN, OPERADOR, CLIENTE
-    │   ├── port/
-    │   │   ├── in/
-    │   │   │   ├── LoginUseCase.java
-    │   │   │   └── RegisterUseCase.java
-    │   │   └── out/
-    │   │       ├── UsuarioRepositoryPort.java
-    │   │       └── JwtPort.java
-    │   └── exception/
-    │       ├── ConflictException.java
-    │       └── CredencialesInvalidasException.java
-    ├── application/
-    │   └── service/
-    │       └── AuthService.java
-    └── infrastructure/
-        ├── adapter/
-        │   ├── in/rest/
-        │   │   ├── controller/AuthController.java
-        │   │   └── dto/request/
-        │   │       ├── LoginRequest.java
-        │   │       └── RegisterRequest.java
-        │   └── out/
-        │       ├── jwt/JwtAdapter.java
-        │       └── persistence/
-        │           ├── entity/ (UsuarioEntity, RolEntity)
-        │           ├── repository/ (UsuarioJpaRepository, RolJpaRepository)
-        │           ├── mapper/UsuarioMapper.java
-        │           └── UsuarioRepositoryAdapter.java
-        ├── common/ApiResponse.java
-        └── config/
-            ├── SecurityConfig.java
-            ├── GlobalExceptionHandler.java
-            └── DataInitializer.java
+1. POST /api/v1/auth/login → JWT (HS256)
+2. Cliente envía: Authorization: Bearer <token>
+3. Gateway (JwtAuthenticationFilter):
+   a. Decodifica y valida JWT (firma, expiración)
+   b. Extrae userId, roles
+   c. Setea SecurityContext con GrantedAuthority (ROLE_xxx)
+   d. Agrega headers X-User-Id, X-User-Roles al request
+4. Servicio destino (HeaderAuthenticationFilter):
+   a. Lee X-User-Id, X-User-Roles
+   b. Crea UsernamePasswordAuthenticationToken
+   c. @PreAuthorize verifica permisos
 ```
 
-### Endpoints
-
-| Método | Ruta | Auth | Descripción |
-|--------|------|------|-------------|
-| `POST` | `/api/v1/auth/register` | Público | Registrar nuevo usuario |
-| `POST` | `/api/v1/auth/login` | Público | Iniciar sesión, devuelve JWT |
-
-### DTOs
-
-**RegisterRequest:**
-```json
-{
-  "nombre": "Juan Pérez",
-  "email": "juan@email.com",
-  "password": "secreta123",
-  "rol": "CLIENTE"
-}
-```
-
-**LoginRequest:**
-```json
-{
-  "email": "juan@email.com",
-  "password": "secreta123"
-}
-```
-
-**Response:**
-```json
-{
-  "success": true,
-  "message": "Operación exitosa",
-  "data": "<JWT_TOKEN>"
-}
-```
-
-### JWT
-
-| Claim | Contenido |
-|-------|-----------|
-| `sub` | UUID del usuario |
-| `nombre` | Nombre completo |
-| `email` | Correo electrónico |
-| `roles` | Roles separados por coma (ej: `"ADMIN,OPERADOR"`) |
-| `iat` | Fecha de emisión |
-| `exp` | Fecha de expiración (24h) |
-
-- **Algoritmo:** HS256
-- **Secreto:** `${JWT_SECRET}` (de Vault o Config Server)
-- **Expiración:** 86400000 ms (24h)
-
-### Roles
+### Roles (RF-08)
 
 | Rol | Permisos |
 |-----|----------|
-| `ADMIN` | Acceso total a todos los endpoints |
-| `OPERADOR` | Gestión de clientes y paquetes (sin eliminar) |
-| `CLIENTE` | Solo consulta de sus propios recursos |
+| `ADMIN` | Acceso total: CRUD de clientes, paquetes, categorías. Eliminar registros. |
+| `OPERADOR` | Crear/consultar/actualizar paquetes y clientes. No puede eliminar. |
+| `CLIENTE` | Solo consultar sus propios paquetes (`/mis-paquetes`) y historial. |
 
-### Seguridad
-- Endpoints `/api/v1/auth/**` y `/actuator/**` públicos
-- Demás endpoints requieren autenticación
-- Contraseñas con BCrypt
-- **Sin filtro JWT local** (depende del API Gateway)
+### DataInitializer
 
-### Base de Datos
-
-```sql
--- Tabla roles
-CREATE TABLE roles (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nombre VARCHAR(20) NOT NULL UNIQUE
-);
--- Valores: ADMIN, OPERADOR, CLIENTE
-
--- Tabla usuarios
-CREATE TABLE usuarios (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    nombre VARCHAR(100) NOT NULL,
-    password VARCHAR(255) NOT NULL,
-    email VARCHAR(100) NOT NULL UNIQUE
-);
-
--- Tabla usuario_roles (N:M)
-CREATE TABLE usuario_roles (
-    usuario_id UUID NOT NULL REFERENCES usuarios(id),
-    rol_id UUID NOT NULL REFERENCES roles(id),
-    PRIMARY KEY (usuario_id, rol_id)
-);
-```
-
-### Seed Data (DataInitializer)
-Al iniciar, crea 3 usuarios por defecto:
-| Email | Password | Rol |
-|-------|----------|-----|
-| `admin@rapidocourier.com` | `admin123` | ADMIN |
-| `operador@rapidocourier.com` | `operador123` | OPERADOR |
-| `cliente@rapidocourier.com` | `cliente123` | CLIENTE |
-
-### Pruebas
-- `AuthServiceTest.java` — 5 tests unitarios (Mockito)
-- `JwtAdapterTest.java` — 3 tests unitarios
-- `AuthControllerTest.java` — 6 tests de integración web
-- `AuthServiceIntegrationTest.java` — 4 tests con Testcontainers
+Al arrancar auth-service, se crean automáticamente:
+- 3 roles: `ADMIN`, `OPERADOR`, `CLIENTE`
+- 3 usuarios iniciales (ver en `DataInitializer.java`)
 
 ---
 
-## 5. clients-service
+## 11. Gestión de Secretos con Vault
 
-Servicio de gestión de clientes con consulta a RENIEC.
+Vault corre en **modo desarrollo** con token `dev-only-token`. Los secretos se almacenan en KV v2:
 
-| Propiedad | Valor |
-|-----------|-------|
-| Puerto | `8082` |
-| Base de datos | `rapidocourier_clientes` |
-| Spring Boot | 4.0.6 |
-| Spring Cloud | 2025.1.1 |
-| Arquitectura | Hexagonal (Ports & Adapters) |
-| Circuit Breaker | Resilience4j (`reniec`) |
-| JWT | Validación local (filtro propio) |
+| Path en Vault | Contenido |
+|---------------|-----------|
+| `secret/auth-service` | `jwt.secret`, `jwt.expiration`, `db.username`, `db.password` |
+| `secret/clients-service` | `reniec.api.token`, `db.username`, `db.password` |
+| `secret/api-gateway` | `jwt.secret` |
+| `secret/paquetes-service` | `jwt.secret`, `db.username`, `db.password` |
 
-### Estructura de paquetes
+### Flujo de lectura
 
 ```
-clients-service/
-└── src/main/java/com/rapidocourier/clientsservice/
-    ├── domain/
-    │   ├── model/
-    │   │   ├── Cliente.java
-    │   │   └── ReniecDataClient.java
-    │   ├── port/
-    │   │   ├── in/
-    │   │   │   ├── RegistrarClienteUseCase.java
-    │   │   │   └── ConsultarClienteUseCase.java
-    │   │   └── out/
-    │   │       ├── ClienteRepositoryPort.java
-    │   │       └── ReniecPort.java
-    │   └── exception/
-    │       ├── ConflictException.java
-    │       ├── ExternalServiceException.java
-    │       └── ResourceNotFoundException.java
-    ├── application/
-    │   └── service/
-    │       └── ClienteService.java
-    └── infrastructure/
-        ├── adapter/
-        │   ├── in/rest/
-        │   │   ├── controller/ClienteController.java
-        │   │   └── dto/
-        │   │       ├── request/ClienteRequest.java
-        │   │       └── response/ClienteResponse.java
-        │   └── out/
-        │       ├── persistence/
-        │       │   ├── entity/ClienteEntity.java
-        │       │   ├── repository/ClienteJpaRepository.java
-        │       │   ├── mapper/ClienteMapper.java
-        │       │   └── ClienteRepositoryAdapter.java
-        │       └── reniec/
-        │           ├── client/ReniecFeignClient.java
-        │           └── adapter/ReniecAdapter.java
-        ├── common/ApiResponse.java
-        └── config/
-            ├── SecurityConfig.java
-            ├── JwtService.java
-            ├── JwtAuthenticationFilter.java
-            ├── JpaConfig.java
-            └── GlobalExceptionHandler.java
+Vault ← vault-init (contenedor) ← init-vault.sh
+  │
+  └──▶ Cada servicio lee sus secretos vía spring.config.import: vault://
+       Config Server también lee desde Vault para servir configuración.
 ```
 
-### Endpoints
+**El secreto JWT NO aparece en ningún archivo del repositorio.** Solo existe en Vault y se inyecta dinámicamente al arrancar cada servicio.
 
-| Método | Ruta | Roles | Descripción |
-|--------|------|-------|-------------|
-| `POST` | `/api/v1/clientes` | ADMIN, OPERADOR | Registrar cliente (consulta RENIEC) |
-| `GET` | `/api/v1/clientes` | ADMIN, OPERADOR | Listar todos los clientes |
-| `GET` | `/api/v1/clientes/{id}` | ADMIN, OPERADOR | Obtener cliente por ID |
-| `DELETE` | `/api/v1/clientes/{id}` | ADMIN | Eliminar cliente |
+---
 
-### DTOs
+## 12. Circuit Breaker y Resiliencia
 
-**ClienteRequest:**
-```json
-{
-  "dni": "46027897",
-  "email": "cliente@email.com"
-}
-```
+### Configuración en paquetes-service
 
-**ClienteResponse:**
-```json
-{
-  "id": "a1b2c3d4-...",
-  "dni": "46027897",
-  "nombre": "ROXANA KARINA",
-  "apellidoPaterno": "DELGADO",
-  "apellidoMaterno": "HUAMANI",
-  "email": "cliente@email.com",
-  "createdAt": "2026-05-24T15:30:00-05:00",
-  "updatedAt": "2026-05-24T15:30:00-05:00"
-}
-```
-
-### Integración RENIEC
-
-**API externa:** `https://api.decolecta.com/v1/reniec/dni`
-
-**Request:**
-```
-GET https://api.decolecta.com/v1/reniec/dni?numero=46027897
-Headers:
-  Authorization: Bearer <token>
-  Content-Type: application/json
-```
-
-**Response:**
-```json
-{
-  "first_name": "ROXANA KARINA",
-  "first_last_name": "DELGADO",
-  "second_last_name": "HUAMANI",
-  "full_name": "DELGADO HUAMANI ROXANA KARINA",
-  "document_number": "46027897"
-}
-```
-
-**Circuit Breaker (`reniec`):**
+**Circuit Breaker (`clients-service`):**
 | Parámetro | Valor |
 |-----------|-------|
-| sliding-window-size | 5 |
-| failure-rate-threshold | 50% |
-| wait-duration-in-open-state | 10s |
-| permitted-number-of-calls-in-half-open-state | 3 |
-| slow-call-duration-threshold | 2s |
-| slow-call-rate-threshold | 50% |
+| `failureRateThreshold` | 50% |
+| `waitDurationInOpenState` | 10s |
+| `slidingWindowSize` | 5 |
+| `permittedNumberOfCallsInHalfOpenState` | 3 |
+| `slowCallDurationThreshold` | 2s |
+| `slowCallRateThreshold` | 50% |
 
-### Seguridad
-- **JWT validation local** (no depende del Gateway)
-- Filtro `JwtAuthenticationFilter` extrae token Bearer, valida firma HS256 con mismo secreto que `auth-service`
-- Extrae `roles` del JWT y los convierte a `GrantedAuthority` (prefijo `ROLE_`)
-- `@EnableMethodSecurity` para `@PreAuthorize` en los endpoints
+**Retry (`clients-service`):**
+| Parámetro | Valor |
+|-----------|-------|
+| `maxAttempts` | 3 |
+| `waitDuration` | 500ms |
+| `enableExponentialBackoff` | true |
 
-### Base de Datos
-
-```sql
-CREATE TABLE clientes (
-    id UUID PRIMARY KEY,
-    dni VARCHAR(8) NOT NULL UNIQUE,
-    nombre VARCHAR(100) NOT NULL,
-    apellido_paterno VARCHAR(100) NOT NULL,
-    apellido_materno VARCHAR(100) NOT NULL,
-    email VARCHAR(255) NOT NULL UNIQUE,
-    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
-);
-CREATE INDEX idx_clientes_dni ON clientes(dni);
-CREATE INDEX idx_clientes_email ON clientes(email);
-```
-
-### JPA Auditing
-- `@CreatedDate` y `@LastModifiedDate` en `createdAt`/`updatedAt`
-- `DateTimeProvider` personalizado que retorna `OffsetDateTime` (no `LocalDateTime`)
-
-### Pruebas (44 tests)
-
-| Test | Tipo | Tests |
-|------|------|-------|
-| `ClienteServiceTest` | Unitario (Mockito) | 5 |
-| `ClienteMapperTest` | Unitario | 3 |
-| `ReniecAdapterTest` | Unitario (Mockito) | 3 |
-| `JwtServiceTest` | Unitario | 3 |
-| `JwtAuthenticationFilterTest` | Unitario (Mockito) | 7 |
-| `ClienteControllerTest` | Integración web (WebMvcTest) | 11 |
-| `GlobalExceptionHandlerTest` | Integración web (WebMvcTest) | 6 |
-| `ClienteRepositoryAdapterTest` | Integración (Testcontainers) | 5 |
-| `ClientsServiceApplicationTests` | Contexto (Testcontainers) | 1 |
-
----
-
-## 6. paquetes-service (no implementado)
-
-Servicio de gestión de paquetes, tracking y estados. Pendiente de desarrollo.
-
-### Planificado
-- Registro de paquetes con categorías
-- Historial de estados con máquina de estados
-- Cálculo de tarifas por ruta y peso
-- Integración con clients-service vía Feign
-
----
-
-## Infraestructura Compartida
-
-### Docker Compose
-
-```yaml
-servicios:
-  vault:        # hashcorp/vault:1.15 → :8200
-  postgres-auth:      # postgres:16-alpine
-  postgres-clientes:  # postgres:16-alpine
-  postgres-paquetes:  # postgres:16-alpine
-  config-server:      # build ./config-server → :8888
-  eureka-server:      # build ./eureka-server → :8761
-  auth-service:       # build ./auth-service → :8081
-  clients-service:    # build ./clients-service → :8082
-```
-
-### Vault (Hashicorp Vault 1.15)
-
-Secretos almacenados:
-
-| Path | Secretos |
-|------|----------|
-| `secret/rapidocourier/auth` | `db.username`, `db.password`, `jwt.secret` |
-| `secret/rapidocourier/clientes` | `db.username`, `db.password`, `reniec.token` |
-| `secret/rapidocourier/paquetes` | `db.username`, `db.password` |
-
-### Red
-- **Nombre:** `rapidocourier-net` (bridge)
-- Los servicios se comunican por nombre de contenedor (ej: `http://config-server:8888`)
-
-### Configuración Remota (Git)
-**Repositorio:** `https://github.com/Shiar-owo/Rapido-Curier-Configs`
-
-Archivos por servicio:
-- `application.yaml` — Configuración global
-- `auth-service.yaml` — Puerto 8081, datasource, JWT, Eureka
-- `clients-service.yaml` — Puerto 8082, datasource, RENIEC, CB, Eureka
-
-### CI/CD (GitHub Actions)
-
-| Workflow | Disparador | Acciones |
-|----------|------------|----------|
-| `auth-service-ci-cd.yml` | push/PR a main/develop/Auth-service + path `auth-service/**` | Test, Build, Docker image |
-| `clients-service-ci-cd.yml` | push/PR a main/develop/clients-service + path `clients-service/**` | Test, Build, Docker image |
-
----
-
-## Patrones y Convenciones
-
-### Arquitectura Hexagonal
-```
-Controller (in) → UseCase (in port) → Service → RepositoryPort (out port) → RepositoryAdapter
-                                                      → ReniecPort (out port) → ReniecAdapter (Feign)
-```
-
-### Reglas del proyecto
-- `OffsetDateTime` siempre, nunca `LocalDateTime`
-- `application.yaml` nunca `application.properties`
-- UUID como primary key
-- Inyección por constructor, nunca `@Autowired`
-- MapStruct para mapeos, con `toDomain()` como default method
-- Testcontainers para tests de integración, nunca H2
-- Flyway para migraciones
-- Resiliencia con Resilience4j
-- Secretos en Vault
-
-### Flujo de Autenticación
-```
-1. POST /api/v1/auth/login → JWT
-2. Cliente envía JWT en header: Authorization: Bearer <token>
-3. clients-service valida JWT localmente (JwtAuthenticationFilter)
-4. Extrae roles del JWT → @PreAuthorize verifica permisos
-```
-
----
-
-## Cómo ejecutar
+### Endpoint de Monitoreo
 
 ```bash
-# Requisitos: Docker, Docker Compose, Java 17+, Maven
+# Acceder al estado de circuit breakers (desde dentro de la red Docker)
+docker exec paquetes-service wget -qO- http://localhost:8083/actuator/circuitbreakers
 
-# 1. Construir todos los servicios
-cd config-server && mvn clean package -DskipTests
-cd ../eureka-server && mvn clean package -DskipTests
-cd ../auth-service && mvn clean package -DskipTests
-cd ../clients-service && mvn clean package -DskipTests
-
-# 2. Iniciar toda la infraestructura
-cd .. && docker compose up -d
-
-# 3. Verificar estado
-curl http://localhost:8761              # Eureka Dashboard
-curl http://localhost:8888/actuator/health  # Config Server
-curl http://localhost:8081/actuator/health  # Auth Service
-curl http://localhost:8082/actuator/health  # Clients Service
-
-# 4. Obtener token JWT
-curl -X POST http://localhost:8081/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email": "admin@rapidocourier.com", "password": "admin123"}'
-
-# 5. Crear cliente
-curl -X POST http://localhost:8082/api/v1/clientes \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer <TOKEN>" \
-  -d '{"dni": "46027897", "email": "cliente@email.com"}'
+# Respuesta:
+{
+  "circuitBreakers": {
+    "clients-service": {
+      "state": "CLOSED",
+      "failureRate": "0.0%",
+      "bufferedCalls": 5,
+      "failedCalls": 0
+    }
+  }
+}
 ```
 
 ---
 
-## Próximos Pasos
+## 13. Instrucciones de Levantamiento
 
-- [ ] Implementar `paquetes-service` (Fase 6 del plan)
-- [ ] Configurar rutas y filtro JWT en `api-gateway`
-- [ ] Integrar Spring Cloud Vault en los servicios
-- [ ] Agregar monitoreo con Prometheus + Grafana
-- [ ] Implementar pruebas de contrato con Pact o Spring Cloud Contract
+### Requisitos
+
+- Docker y Docker Compose v2+
+- Java 17+
+- Maven 3.9+
+
+### Paso 1: Clonar y construir
+
+```bash
+git clone https://github.com/Shiar-owo/RapidoCurier.git
+cd RapidoCurier
+
+# Clonar repositorio de configuración
+git clone https://github.com/Shiar-owo/Rapido-Curier-Configs.git RapidoCurierConfigs
+
+# Construir todos los servicios
+cd config-server && mvn clean package -DskipTests && cd ..
+cd eureka-server && mvn clean package -DskipTests && cd ..
+cd api-gateway && mvn clean package -DskipTests && cd ..
+cd auth-service && mvn clean package -DskipTests && cd ..
+cd clients-service && mvn clean package -DskipTests && cd ..
+cd paquetes-service && mvn clean package -DskipTests && cd ..
+```
+
+### Paso 2: Iniciar infraestructura
+
+```bash
+docker compose up -d
+```
+
+### Orden de arranque recomendado:
+
+1. **Vault** (`:8200`) + **vault-init** — Inicializa secretos
+2. **PostgreSQL** (3 contenedores) — Bases de datos
+3. **Config Server** (`:8888`) — Configuración centralizada
+4. **Eureka Server** (`:8761`) — Service Discovery
+5. **Auth Service** (`:8081`) — Genera JWT
+6. **Clients Service** (`:8082`) — Gestión de clientes
+7. **Paquetes Service** (`:8083`) — Gestión de paquetes
+8. **API Gateway** (`:8080`) — Punto de entrada
+
+> Docker Compose maneja las dependencias con `depends_on` y health checks automáticamente.
+
+### Paso 3: Verificar
+
+```bash
+# Verificar servicios
+curl http://localhost:8761/eureka/apps    # Eureka dashboard
+curl http://localhost:8080/api/v1/auth/login  # Gateway funcionando
+docker exec paquetes-service wget -qO- http://localhost:8083/actuator/health
+docker exec clients-service wget -qO- http://localhost:8082/actuator/health
+```
+
+### Paso 4: Login y uso
+
+```bash
+# Login (obtener JWT)
+TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@rapidocourier.pe","password":"Segura123!"}' | jq -r '.data')
+
+# Registrar cliente
+curl -X POST http://localhost:8080/api/v1/clientes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{"dni":"46027897","email":"test@email.com"}'
+
+# Registrar paquete
+curl -X POST http://localhost:8080/api/v1/paquetes \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $TOKEN" \
+  -d '{
+    "pesoKg": 5.0,
+    "valorDeclarado": 1000.0,
+    "sucursalOrigen": "LIMA",
+    "sucursalDestino": "CUSCO",
+    "remitenteId": "<uuid-remitente>",
+    "destinatarioId": "<uuid-destinatario>",
+    "categoriaIds": ["<uuid-categoria>"]
+  }'
+```
+
+---
+
+## 14. Eureka Dashboard
+
+El dashboard de Eureka está disponible en `http://localhost:8761`. Muestra todos los servicios registrados en estado `UP`:
+
+| Aplicación | Instancias | Estado |
+|-----------|-----------|--------|
+| API-GATEWAY | 1 | UP |
+| AUTH-SERVICE | 1 | UP |
+| CONFIG-SERVER | 1 | UP |
+| CLIENTS-SERVICE | 1 | UP |
+| PAQUETES-SERVICE | 1 | UP |
+
+**Heartbeat configurado en config-server:**
+```yaml
+eureka.instance.lease-renewal-interval-in-seconds: 10   # Heartbeat cada 10s
+eureka.instance.lease-expiration-duration-in-seconds: 30  # Expira tras 30s sin heartbeat
+```
+
+---
+
+## 15. Hot Reload de Configuración
+
+La tarifa del paquete (`TarifaProperties`) es hot-reloadable con `@RefreshScope`:
+
+```bash
+# 1. Verificar tarifa actual
+curl -s http://localhost:8080/api/v1/paquetes/buscar?texto=RC \
+  -H "Authorization: Bearer $TOKEN" | jq '.data[0].tarifa'
+
+# 2. Modificar en el repo de configs (Rapido-Curier-Configs/paquetes-service.yaml):
+#    tarifa:
+#      costoPorKg: 12.0
+
+# 3. Ejecutar refresh
+curl -X POST http://localhost:8083/actuator/refresh \
+  -H "Content-Type: application/json"
+
+# 4. Verificar cambio (sin reiniciar el servicio)
+curl -s http://localhost:8080/api/v1/paquetes/buscar?texto=RC \
+  -H "Authorization: Bearer $TOKEN" | jq '.data[0].tarifa'
+```
+
+---
+
+## 16. Pruebas Unitarias
+
+| Servicio | Archivo | Tipo | Tests | Cobertura |
+|----------|---------|------|-------|-----------|
+| **auth-service** | `AuthServiceTest` | Unit (Mockito) | 5 | Happy path, credenciales inválidas, email duplicado |
+| **auth-service** | `AuthControllerTest` | WebMvcTest | 6 | Login, register, validación |
+| **clients-service** | `ClienteServiceTest` | Unit (Mockito) | 5 | Happy path, DNI duplicado, email duplicado |
+| **clients-service** | `ReniecAdapterTest` | Unit (Mockito) | 8 | RENIEC success, 404, 500, 502, 503 |
+| **clients-service** | `ClienteControllerTest` | WebMvcTest | 13 | CRUD completo, roles, validación |
+| **clients-service** | `GlobalExceptionHandlerTest` | WebMvcTest | 6 | 400, 404, 409, 502 |
+| **clients-service** | `ClienteRepositoryAdapterTest` | Integration (Testcontainers) | 8 | CRUD con BD real |
+| **clients-service** | `ClienteMapperTest` | Unit | 3 | Mapeo entity ↔ domain |
+| **paquetes-service** | `PaqueteServiceTest` | Unit (Mockito) | 10+ | Happy path, transición inválida, cliente no encontrado |
+| **paquetes-service** | `PaqueteControllerTest` | WebMvcTest | 24 | CRUD, roles, CLIENTE endpoints |
+| **paquetes-service** | `CategoriaControllerTest` | WebMvcTest | 5 | CRUD categorías, ADMIN-only |
+| **paquetes-service** | `GlobalExceptionHandlerTest` | WebMvcTest | 6 | 400, 404, 409, 502 |
+| **paquetes-service** | `ClienteFeignAdapterTest` | Unit (Mockito) | 4 | Feign success, 404, error |
+| **paquetes-service** | Repository tests | Integration (Testcontainers) | 6+ | CRUD con BD real |
+
+### Ejecutar pruebas
+
+```bash
+cd auth-service && mvn test        # 11+ tests
+cd clients-service && mvn test     # 46 tests
+cd paquetes-service && mvn test    # 131 tests (12 skipped contextLoads)
+```
+
+---
+
+## Puertos Expuestos
+
+| Puerto | Servicio | Acceso |
+|--------|----------|--------|
+| `8080` | API Gateway | Externo (único punto de entrada) |
+| `8761` | Eureka Server | Externo (dashboard) |
+| `8888` | Config Server | Externo |
+| `8200` | Vault | Externo (UI dev mode) |
+| `8081` | auth-service | Solo red Docker |
+| `8082` | clients-service | Solo red Docker |
+| `8083` | paquetes-service | Solo red Docker |
+
+> Los servicios de negocio **no están expuestos al host** (RNF-08). Todo el tráfico pasa por el Gateway.
