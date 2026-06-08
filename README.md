@@ -6,26 +6,120 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 
 ## Tabla de Contenidos
 
-1. [Mapa de Microservicios](#1-mapa-de-microservicios)
-2. [Arquitectura General](#2-arquitectura-general)
-3. [Dependencias entre Servicios](#3-dependencias-entre-servicios)
-4. [Modelo de Datos por Servicio](#4-modelo-de-datos-por-servicio)
-5. [Justificación de Bases de Datos](#5-justificación-de-bases-de-datos)
-6. [Justificación de Arquitectura Interna](#6-justificación-de-arquitectura-interna)
-7. [Regla de Cálculo de Tarifa (RF-03)](#7-regla-de-cálculo-de-tarifa-rf-03)
-8. [Estados y Transiciones del Paquete (RF-04)](#8-estados-y-transiciones-del-paquete-rf-04)
-9. [Comunicación Inter-Servicio](#9-comunicación-inter-servicio)
-10. [Seguridad y JWT](#10-seguridad-y-jwt)
-11. [Gestión de Secretos con Vault](#11-gestión-de-secretos-con-vault)
-12. [Circuit Breaker y Resiliencia](#12-circuit-breaker-y-resiliencia)
-13. [Instrucciones de Levantamiento](#13-instrucciones-de-levantamiento)
-14. [Eureka Dashboard](#14-eureka-dashboard)
-15. [Hot Reload de Configuración](#15-hot-reload-de-configuración)
-16. [Pruebas Unitarias](#16-pruebas-unitarias)
+1. [Cómo Ejecutar](#1-cómo-ejecutar)
+2. [Eureka Dashboard](#2-eureka-dashboard)
+3. [Pruebas y Documentación](#3-pruebas-y-documentación)
+4. [Mapa de Microservicios](#4-mapa-de-microservicios)
+5. [Arquitectura General](#5-arquitectura-general)
+6. [Dependencias entre Servicios](#6-dependencias-entre-servicios)
+7. [Modelo de Datos por Servicio](#7-modelo-de-datos-por-servicio)
+8. [Justificación de Bases de Datos](#8-justificación-de-bases-de-datos)
+9. [Justificación de Arquitectura Interna](#9-justificación-de-arquitectura-interna)
+10. [Regla de Cálculo de Tarifa (RF-03)](#10-regla-de-cálculo-de-tarifa-rf-03)
+11. [Estados y Transiciones del Paquete (RF-04)](#11-estados-y-transiciones-del-paquete-rf-04)
+12. [Comunicación Inter-Servicio](#12-comunicación-inter-servicio)
+13. [Seguridad y JWT](#13-seguridad-y-jwt)
+14. [Gestión de Secretos con Vault](#14-gestión-de-secretos-con-vault)
+15. [Circuit Breaker y Resiliencia](#15-circuit-breaker-y-resiliencia)
+16. [Hot Reload de Configuración](#16-hot-reload-de-configuración)
+17. [Pruebas Unitarias](#17-pruebas-unitarias)
 
 ---
 
-## 1. Mapa de Microservicios
+## 1. Cómo Ejecutar
+
+### Requisitos
+
+- Docker y Docker Compose v2+
+
+### Paso 1: Clonar
+
+```bash
+git clone https://github.com/Shiar-owo/RapidoCurier.git
+cd RapidoCurier
+```
+
+### Paso 2: Levantar todo
+
+```bash
+docker compose up --build -d
+```
+
+Cada servicio de negocio y de infraestructura incluye su propio `Dockerfile` con **multi-stage build**: la primera etapa (`maven:3.9-eclipse-temurin-17-alpine`) compila el proyecto con Maven dentro del contenedor, y la segunda (`eclipse-temurin:17-jre-alpine`) genera una imagen JRE ligera para producción. El flag `--build` ejecuta estas etapas automáticamente para cada servicio.
+
+El `docker-compose.yml` define `depends_on` con health checks, por lo que el orden de arranque se gestiona automáticamente: Vault y PostgreSQL arrancan primero, luego Config Server y Eureka, y finalmente los servicios de negocio y el Gateway.
+
+> **Opcional:** El Config Server clona automáticamente el repositorio de configuración desde GitHub (`https://github.com/Shiar-owo/Rapido-Curier-Configs`) al arrancar. No es necesario clonarlo manualmente.
+
+### Paso 3: Verificar
+
+```bash
+curl http://localhost:8761/eureka/apps
+```
+
+### Puertos Expuestos
+
+| Puerto | Servicio | Acceso |
+|--------|----------|--------|
+| `8080` | API Gateway | Externo (único punto de entrada) |
+| `8761` | Eureka Server | Externo (dashboard) |
+| `8888` | Config Server | Externo |
+| `8200` | Vault | Externo (UI dev mode) |
+| `8081` | auth-service | Solo red Docker |
+| `8082` | clients-service | Solo red Docker |
+| `8083` | paquetes-service | Solo red Docker |
+
+> Los servicios de negocio **no están expuestos al host** (RNF-08). Todo el tráfico pasa por el Gateway.
+
+---
+
+## 2. Eureka Dashboard
+
+El dashboard de Eureka está disponible en `http://localhost:8761`. Muestra todos los servicios registrados en estado `UP`:
+
+| Aplicación | Instancias | Estado |
+|-----------|-----------|--------|
+| API-GATEWAY | 1 | UP |
+| AUTH-SERVICE | 1 | UP |
+| CONFIG-SERVER | 1 | UP |
+| CLIENTS-SERVICE | 1 | UP |
+| PAQUETES-SERVICE | 1 | UP |
+
+**Heartbeat configurado en config-server:**
+```yaml
+eureka.instance.lease-renewal-interval-in-seconds: 10   # Heartbeat cada 10s
+eureka.instance.lease-expiration-duration-in-seconds: 30  # Expira tras 30s sin heartbeat
+```
+
+![Eureka Dashboard](imagenes/Eureka_Dashboard.png)
+
+---
+
+## 3. Pruebas y Documentación
+
+### Casos de Prueba
+
+El archivo [`examples.md`](examples.md) contiene 42 casos de prueba que cubren todos los endpoints del sistema: autenticación, clientes (CRUD, RENIEC, roles), paquetes (registro, estados, búsquedas, CLIENTE endpoints), categorías (CRUD, asignación, roles) y seguridad (401, 403).
+
+### Swagger UI
+
+![Swagger UI](imagenes/Swagger-UI.png)
+
+La documentación OpenAPI está disponible en:
+- Swagger UI: `http://localhost:8080/swagger-ui.html`
+- JSON: `http://localhost:8080/v3/api-docs`
+
+### Pruebas Unitarias
+
+```bash
+cd auth-service && mvn test        # 11+ tests
+cd clients-service && mvn test     # 46 tests
+cd paquetes-service && mvn test    # 131 tests
+```
+
+---
+
+## 4. Mapa de Microservicios
 
 | Servicio | Bounded Context | Entidades | RF Implementados | BD | Comunicación |
 |----------|----------------|-----------|-----------------|-----|-------------|
@@ -44,7 +138,7 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 
 ---
 
-## 2. Arquitectura General
+## 5. Arquitectura General
 
 ```
                         ┌──────────────────┐
@@ -81,7 +175,7 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 
 ---
 
-## 3. Dependencias entre Servicios
+## 6. Dependencias entre Servicios
 
 | Servicio Origen | Servicio Destino | Tipo | Protocolo | Descripción |
 |----------------|-----------------|------|-----------|-------------|
@@ -98,7 +192,7 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 
 ---
 
-## 4. Modelo de Datos por Servicio
+## 7. Modelo de Datos por Servicio
 
 ### auth-service (`rapidocourier_auth`)
 
@@ -173,7 +267,7 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 
 ---
 
-## 5. Justificación de Bases de Datos
+## 8. Justificación de Bases de Datos
 
 | Servicio | BD | Justificación |
 |----------|-----|---------------|
@@ -185,7 +279,7 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 
 ---
 
-## 6. Justificación de Arquitectura Interna
+## 9. Justificación de Arquitectura Interna
 
 Todos los servicios de negocio siguen **Arquitectura Hexagonal (Ports & Adapters)**:
 
@@ -212,7 +306,7 @@ HTTP Request → Controller (adapter in) → UseCase (port in) → Service → R
 
 ---
 
-## 7. Regla de Cálculo de Tarifa (RF-03)
+## 10. Regla de Cálculo de Tarifa (RF-03)
 
 La tarifa se calcula automáticamente al registrar un paquete:
 
@@ -251,7 +345,7 @@ tarifa = (5 × 8.0) + (1000 × 0.01) + 20.0
 
 ---
 
-## 8. Estados y Transiciones del Paquete (RF-04)
+## 11. Estados y Transiciones del Paquete (RF-04)
 
 ### Estados
 
@@ -291,7 +385,7 @@ Una transición inválida retorna **409 Conflict** con mensaje descriptivo indic
 
 ---
 
-## 9. Comunicación Inter-Servicio
+## 12. Comunicación Inter-Servicio
 
 ### Tipo: Sincrónica (Feign Client)
 
@@ -324,7 +418,7 @@ El Gateway propaga `X-User-Id` y `X-User-Roles` como headers HTTP reales. Paquet
 
 ---
 
-## 10. Seguridad y JWT
+## 13. Seguridad y JWT
 
 ### Estrategia: JWT Validado Solo en el Gateway
 
@@ -367,7 +461,7 @@ Al arrancar auth-service, se crean automáticamente:
 
 ---
 
-## 11. Gestión de Secretos con Vault
+## 14. Gestión de Secretos con Vault
 
 Vault corre en **modo desarrollo** con token `dev-only-token`. Los secretos se almacenan en KV v2:
 
@@ -391,7 +485,7 @@ Vault ← vault-init (contenedor) ← init-vault.sh
 
 ---
 
-## 12. Circuit Breaker y Resiliencia
+## 15. Circuit Breaker y Resiliencia
 
 ### Configuración en paquetes-service
 
@@ -431,115 +525,11 @@ docker exec paquetes-service wget -qO- http://localhost:8083/actuator/circuitbre
 }
 ```
 
----
 
-## 13. Instrucciones de Levantamiento
-
-### Requisitos
-
-- Docker y Docker Compose v2+
-- Java 17+
-- Maven 3.9+
-
-### Paso 1: Clonar y construir
-
-```bash
-git clone https://github.com/Shiar-owo/RapidoCurier.git
-cd RapidoCurier
-
-# Clonar repositorio de configuración
-git clone https://github.com/Shiar-owo/Rapido-Curier-Configs.git RapidoCurierConfigs
-
-# Construir todos los servicios
-cd config-server && mvn clean package -DskipTests && cd ..
-cd eureka-server && mvn clean package -DskipTests && cd ..
-cd api-gateway && mvn clean package -DskipTests && cd ..
-cd auth-service && mvn clean package -DskipTests && cd ..
-cd clients-service && mvn clean package -DskipTests && cd ..
-cd paquetes-service && mvn clean package -DskipTests && cd ..
-```
-
-### Paso 2: Iniciar infraestructura
-
-```bash
-docker compose up -d
-```
-
-### Orden de arranque recomendado:
-
-1. **Vault** (`:8200`) + **vault-init** — Inicializa secretos
-2. **PostgreSQL** (3 contenedores) — Bases de datos
-3. **Config Server** (`:8888`) — Configuración centralizada
-4. **Eureka Server** (`:8761`) — Service Discovery
-5. **Auth Service** (`:8081`) — Genera JWT
-6. **Clients Service** (`:8082`) — Gestión de clientes
-7. **Paquetes Service** (`:8083`) — Gestión de paquetes
-8. **API Gateway** (`:8080`) — Punto de entrada
-
-> Docker Compose maneja las dependencias con `depends_on` y health checks automáticamente.
-
-### Paso 3: Verificar
-
-```bash
-# Verificar servicios
-curl http://localhost:8761/eureka/apps    # Eureka dashboard
-curl http://localhost:8080/api/v1/auth/login  # Gateway funcionando
-docker exec paquetes-service wget -qO- http://localhost:8083/actuator/health
-docker exec clients-service wget -qO- http://localhost:8082/actuator/health
-```
-
-### Paso 4: Login y uso
-
-```bash
-# Login (obtener JWT)
-TOKEN=$(curl -s -X POST http://localhost:8080/api/v1/auth/login \
-  -H "Content-Type: application/json" \
-  -d '{"email":"admin@rapidocourier.pe","password":"Segura123!"}' | jq -r '.data')
-
-# Registrar cliente
-curl -X POST http://localhost:8080/api/v1/clientes \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{"dni":"46027897","email":"test@email.com"}'
-
-# Registrar paquete
-curl -X POST http://localhost:8080/api/v1/paquetes \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d '{
-    "pesoKg": 5.0,
-    "valorDeclarado": 1000.0,
-    "sucursalOrigen": "LIMA",
-    "sucursalDestino": "CUSCO",
-    "remitenteId": "<uuid-remitente>",
-    "destinatarioId": "<uuid-destinatario>",
-    "categoriaIds": ["<uuid-categoria>"]
-  }'
-```
 
 ---
 
-## 14. Eureka Dashboard
-
-El dashboard de Eureka está disponible en `http://localhost:8761`. Muestra todos los servicios registrados en estado `UP`:
-
-| Aplicación | Instancias | Estado |
-|-----------|-----------|--------|
-| API-GATEWAY | 1 | UP |
-| AUTH-SERVICE | 1 | UP |
-| CONFIG-SERVER | 1 | UP |
-| CLIENTS-SERVICE | 1 | UP |
-| PAQUETES-SERVICE | 1 | UP |
-
-**Heartbeat configurado en config-server:**
-```yaml
-eureka.instance.lease-renewal-interval-in-seconds: 10   # Heartbeat cada 10s
-eureka.instance.lease-expiration-duration-in-seconds: 30  # Expira tras 30s sin heartbeat
-```
-
----
-
-## 15. Hot Reload de Configuración
+## 16. Hot Reload de Configuración
 
 La tarifa del paquete (`TarifaProperties`) es hot-reloadable con `@RefreshScope`:
 
@@ -563,7 +553,7 @@ curl -s http://localhost:8080/api/v1/paquetes/buscar?texto=RC \
 
 ---
 
-## 16. Pruebas Unitarias
+## 17. Pruebas Unitarias
 
 | Servicio | Archivo | Tipo | Tests | Cobertura |
 |----------|---------|------|-------|-----------|
@@ -589,19 +579,5 @@ cd auth-service && mvn test        # 11+ tests
 cd clients-service && mvn test     # 46 tests
 cd paquetes-service && mvn test    # 131 tests (12 skipped contextLoads)
 ```
-
----
-
-## Puertos Expuestos
-
-| Puerto | Servicio | Acceso |
-|--------|----------|--------|
-| `8080` | API Gateway | Externo (único punto de entrada) |
-| `8761` | Eureka Server | Externo (dashboard) |
-| `8888` | Config Server | Externo |
-| `8200` | Vault | Externo (UI dev mode) |
-| `8081` | auth-service | Solo red Docker |
-| `8082` | clients-service | Solo red Docker |
-| `8083` | paquetes-service | Solo red Docker |
 
 > Los servicios de negocio **no están expuestos al host** (RNF-08). Todo el tráfico pasa por el Gateway.
