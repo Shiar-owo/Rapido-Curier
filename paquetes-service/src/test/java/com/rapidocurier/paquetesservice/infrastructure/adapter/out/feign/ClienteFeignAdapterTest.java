@@ -135,4 +135,47 @@ class ClienteFeignAdapterTest {
 
         assertThrows(ExternalServiceException.class, () -> adapter.buscarPorNombre("Test"));
     }
+
+    @Test
+    void buscarPorEmail_existe_retornaClienteReferencia() {
+        FeignApiResponse<ClienteResponse> apiResponse = new FeignApiResponse<>(true, "OK", clienteResponse);
+        when(feignClient.buscarPorEmail("juan@test.com")).thenReturn(apiResponse);
+
+        ClienteReferencia result = adapter.buscarPorEmail("juan@test.com");
+
+        assertAll(
+            () -> assertEquals(clienteId, result.id()),
+            () -> assertEquals("12345678", result.dni()),
+            () -> assertEquals("Juan", result.nombre()),
+            () -> assertEquals("juan@test.com", result.email())
+        );
+    }
+
+    @Test
+    void buscarPorEmail_noExiste_lanzaResourceNotFoundException() {
+        when(feignClient.buscarPorEmail("noexiste@test.com"))
+            .thenThrow(new FeignException.NotFound("Not Found",
+                dummyRequest("/api/v1/clientes/por-email?email=noexiste@test.com"),
+                new byte[0], Map.of()));
+
+        assertThrows(ResourceNotFoundException.class, () -> adapter.buscarPorEmail("noexiste@test.com"));
+    }
+
+    @Test
+    void buscarPorEmail_responseNoExitoso_lanzaResourceNotFoundException() {
+        FeignApiResponse<ClienteResponse> apiResponse = new FeignApiResponse<>(false, "No encontrado", null);
+        when(feignClient.buscarPorEmail("test@test.com")).thenReturn(apiResponse);
+
+        assertThrows(ResourceNotFoundException.class, () -> adapter.buscarPorEmail("test@test.com"));
+    }
+
+    @Test
+    void buscarPorEmail_errorServidor_lanzaExternalServiceException() {
+        when(feignClient.buscarPorEmail("test@test.com"))
+            .thenThrow(new FeignException.InternalServerError("Internal Server Error",
+                dummyRequest("/api/v1/clientes/por-email?email=test@test.com"),
+                new byte[0], Map.of()));
+
+        assertThrows(ExternalServiceException.class, () -> adapter.buscarPorEmail("test@test.com"));
+    }
 }

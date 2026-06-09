@@ -87,7 +87,7 @@ public class ClienteController {
     }
 
     @GetMapping("/{id}")
-    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
     @Operation(summary = "Get client by ID", description = "Returns a single client by its UUID")
     @ApiResponses({
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Client found"),
@@ -97,6 +97,20 @@ public class ClienteController {
     })
     public ResponseEntity<ApiResponse<ClienteResponse>> obtener(@PathVariable UUID id) {
         Cliente cliente = consultarClienteUseCase.buscarPorId(id);
+        return ApiResponse.ok(ClienteResponse.fromDomain(cliente));
+    }
+
+    @GetMapping("/por-email")
+    @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR', 'CLIENTE')")
+    @Operation(summary = "Get client by email", description = "Returns a single client matching the given email")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Client found"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Client not found")
+    })
+    public ResponseEntity<ApiResponse<ClienteResponse>> obtenerPorEmail(
+            @org.springframework.web.bind.annotation.RequestParam String email) {
+        Cliente cliente = consultarClienteUseCase.buscarPorEmail(email);
         return ApiResponse.ok(ClienteResponse.fromDomain(cliente));
     }
 

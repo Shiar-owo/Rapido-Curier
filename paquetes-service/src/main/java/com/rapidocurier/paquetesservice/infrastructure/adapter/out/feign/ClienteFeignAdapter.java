@@ -76,6 +76,28 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
         }
     }
 
+    @Override
+    @Retry(name = CLIENTS_SERVICE)
+    @CircuitBreaker(name = CLIENTS_SERVICE, fallbackMethod = "buscarPorEmailFallback")
+    public ClienteReferencia buscarPorEmail(String email) {
+        try {
+            FeignApiResponse<ClienteResponse> response = feignClient.buscarPorEmail(email);
+
+            if (!response.success() || response.data() == null) {
+                throw new ResourceNotFoundException("Cliente no encontrado con email: " + email);
+            }
+
+            ClienteResponse cr = response.data();
+            String fullName = (cr.nombre() + " " + cr.apellidoPaterno() + " " + cr.apellidoMaterno()).trim();
+            return new ClienteReferencia(cr.id(), cr.dni(), cr.nombre(), fullName, cr.email());
+        } catch (FeignException.NotFound e) {
+            throw new ResourceNotFoundException("Cliente no encontrado con email: " + email);
+        } catch (FeignException e) {
+            log.error("Error calling clients-service for buscarPorEmail: {}", e.getMessage());
+            throw new ExternalServiceException("Error al consultar clients-service: " + e.getMessage());
+        }
+    }
+
     public ClienteReferencia obtenerClienteFallback(UUID id, Throwable t) {
         log.warn("Fallback for obtenerCliente(id={}): {}", id, t.getMessage());
         throw new ExternalServiceException("clients-service no disponible para obtener cliente");
@@ -84,5 +106,10 @@ public class ClienteFeignAdapter implements ClienteFeignPort {
     public List<ClienteReferencia> buscarPorNombreFallback(String nombre, Throwable t) {
         log.warn("Fallback for buscarPorNombre(nombre={}): {}", nombre, t.getMessage());
         throw new ExternalServiceException("clients-service no disponible para buscar clientes");
+    }
+
+    public ClienteReferencia buscarPorEmailFallback(String email, Throwable t) {
+        log.warn("Fallback for buscarPorEmail(email={}): {}", email, t.getMessage());
+        throw new ExternalServiceException("clients-service no disponible para buscar cliente por email");
     }
 }

@@ -15,6 +15,7 @@ import com.rapidocurier.paquetesservice.domain.model.Categoria;
 import com.rapidocurier.paquetesservice.domain.model.EstadoHistorial;
 import com.rapidocurier.paquetesservice.domain.model.EstadoPaquete;
 import com.rapidocurier.paquetesservice.domain.model.Paquete;
+import com.rapidocurier.paquetesservice.domain.model.ClienteReferencia;
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
 import com.rapidocurier.paquetesservice.domain.port.out.ClienteFeignPort;
 import com.rapidocurier.paquetesservice.infrastructure.config.GlobalExceptionHandler;
@@ -390,11 +391,14 @@ class PaqueteControllerTest {
     @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
     void misPaquetes_happyPath_retorna200() throws Exception {
         Paquete paquete = paqueteValido();
-        when(consultarMisPaquetesUseCase.buscarMisPaquetes(
-            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890")))
+        UUID clienteId = paquete.getRemitenteId();
+        when(clienteFeignPort.buscarPorEmail("test@test.com"))
+            .thenReturn(new ClienteReferencia(clienteId, "12345678", "Juan", "Juan Perez Garcia", "test@test.com"));
+        when(consultarMisPaquetesUseCase.buscarMisPaquetes(clienteId))
             .thenReturn(List.of(paquete));
 
-        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes"))
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes")
+                .header("X-User-Email", "test@test.com"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data").isArray())
@@ -404,11 +408,14 @@ class PaqueteControllerTest {
     @Test
     @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
     void misPaquetes_sinPaquetes_retorna200Vacia() throws Exception {
-        when(consultarMisPaquetesUseCase.buscarMisPaquetes(
-            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890")))
+        UUID clienteId = UUID.randomUUID();
+        when(clienteFeignPort.buscarPorEmail("test@test.com"))
+            .thenReturn(new ClienteReferencia(clienteId, "12345678", "Juan", "Juan Perez Garcia", "test@test.com"));
+        when(consultarMisPaquetesUseCase.buscarMisPaquetes(clienteId))
             .thenReturn(List.of());
 
-        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes"))
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes")
+                .header("X-User-Email", "test@test.com"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data").isArray())
@@ -418,7 +425,8 @@ class PaqueteControllerTest {
     @Test
     @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "ADMIN")
     void misPaquetes_rolAdmin_retorna403() throws Exception {
-        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes"))
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes")
+                .header("X-User-Email", "test@test.com"))
             .andExpect(status().isForbidden());
     }
 
@@ -426,14 +434,17 @@ class PaqueteControllerTest {
     @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
     void misPaquetesHistorial_happyPath_retorna200() throws Exception {
         UUID paqueteId = UUID.randomUUID();
-        UUID clienteId = UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+        UUID clienteId = UUID.randomUUID();
+        when(clienteFeignPort.buscarPorEmail("test@test.com"))
+            .thenReturn(new ClienteReferencia(clienteId, "12345678", "Juan", "Juan Perez Garcia", "test@test.com"));
         List<EstadoHistorial> historial = List.of(
             new EstadoHistorial(null, paqueteId, EstadoPaquete.REGISTRADO, OffsetDateTime.now(), "sistema")
         );
         when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(clienteId, paqueteId))
             .thenReturn(historial);
 
-        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId))
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId)
+                .header("X-User-Email", "test@test.com"))
             .andExpect(status().isOk())
             .andExpect(jsonPath("$.success").value(true))
             .andExpect(jsonPath("$.data").isArray())
@@ -444,11 +455,14 @@ class PaqueteControllerTest {
     @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
     void misPaquetesHistorial_paqueteNoExiste_retorna404() throws Exception {
         UUID paqueteId = UUID.randomUUID();
-        when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(
-            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), paqueteId))
+        UUID clienteId = UUID.randomUUID();
+        when(clienteFeignPort.buscarPorEmail("test@test.com"))
+            .thenReturn(new ClienteReferencia(clienteId, "12345678", "Juan", "Juan Perez Garcia", "test@test.com"));
+        when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(clienteId, paqueteId))
             .thenThrow(new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
 
-        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId))
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId)
+                .header("X-User-Email", "test@test.com"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.success").value(false));
     }
@@ -457,11 +471,14 @@ class PaqueteControllerTest {
     @WithMockUser(username = "a1b2c3d4-e5f6-7890-abcd-ef1234567890", roles = "CLIENTE")
     void misPaquetesHistorial_noEsPropietario_retorna404() throws Exception {
         UUID paqueteId = UUID.randomUUID();
-        when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(
-            UUID.fromString("a1b2c3d4-e5f6-7890-abcd-ef1234567890"), paqueteId))
+        UUID clienteId = UUID.randomUUID();
+        when(clienteFeignPort.buscarPorEmail("test@test.com"))
+            .thenReturn(new ClienteReferencia(clienteId, "12345678", "Juan", "Juan Perez Garcia", "test@test.com"));
+        when(consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(clienteId, paqueteId))
             .thenThrow(new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
 
-        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId))
+        mockMvc.perform(get("/api/v1/paquetes/mis-paquetes/{id}/historial", paqueteId)
+                .header("X-User-Email", "test@test.com"))
             .andExpect(status().isNotFound())
             .andExpect(jsonPath("$.success").value(false));
     }

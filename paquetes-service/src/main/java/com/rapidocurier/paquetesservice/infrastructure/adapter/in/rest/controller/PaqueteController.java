@@ -79,6 +79,15 @@ public class PaqueteController {
         return paquetes.stream().map(this::enrichWithClientNames).toList();
     }
 
+    private UUID resolveClientIdFromEmail(jakarta.servlet.http.HttpServletRequest httpRequest) {
+        String email = httpRequest.getHeader("X-User-Email");
+        if (email == null || email.isBlank()) {
+            throw new com.rapidocurier.paquetesservice.domain.exception.ResourceNotFoundException("Email no disponible en el token");
+        }
+        ClienteReferencia cliente = clienteFeignPort.buscarPorEmail(email);
+        return cliente.id();
+    }
+
     @PostMapping
     @PreAuthorize("hasAnyRole('ADMIN', 'OPERADOR')")
     @Operation(summary = "Register a new package", description = "Registers a new package with sender, recipient, categories and branch info")
@@ -110,8 +119,9 @@ public class PaqueteController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires CLIENTE role")
     })
-    public ResponseEntity<ApiResponse<List<PaqueteResponse>>> misPaquetes() {
-        UUID clienteId = UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+    public ResponseEntity<ApiResponse<List<PaqueteResponse>>> misPaquetes(
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        UUID clienteId = resolveClientIdFromEmail(httpRequest);
         List<PaqueteResponse> paquetes = enrichAll(consultarMisPaquetesUseCase.buscarMisPaquetes(clienteId));
         return ApiResponse.ok(paquetes);
     }
@@ -125,8 +135,10 @@ public class PaqueteController {
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires CLIENTE role"),
         @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Package not found or not owned by user")
     })
-    public ResponseEntity<ApiResponse<List<EstadoHistorialResponse>>> misPaquetesHistorial(@PathVariable UUID id) {
-        UUID clienteId = UUID.fromString(SecurityContextHolder.getContext().getAuthentication().getName());
+    public ResponseEntity<ApiResponse<List<EstadoHistorialResponse>>> misPaquetesHistorial(
+            @PathVariable UUID id,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        UUID clienteId = resolveClientIdFromEmail(httpRequest);
         List<EstadoHistorialResponse> historial = consultarMisPaquetesUseCase.obtenerHistorialMisPaquetes(clienteId, id).stream()
             .map(EstadoHistorialResponse::fromDomain)
             .toList();
