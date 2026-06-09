@@ -100,7 +100,15 @@ eureka.instance.lease-expiration-duration-in-seconds: 30  # Expira tras 30s sin 
 
 ### Casos de Prueba
 
-El archivo [`examples.md`](examples.md) contiene 42 casos de prueba que cubren todos los endpoints del sistema: autenticación, clientes (CRUD, RENIEC, roles), paquetes (registro, estados, búsquedas, CLIENTE endpoints), categorías (CRUD, asignación, roles) y seguridad (401, 403).
+El archivo [`examples.md`](examples.md) contiene **53 casos de prueba** que cubren todos los endpoints del sistema: autenticación, clientes (CRUD, RENIEC, roles), paquetes (registro, estados, búsquedas, CLIENTE endpoints), categorías (CRUD, asignación, roles) y seguridad (401, 403).
+
+### Script de Pruebas
+
+```bash
+bash run-tests.sh    # Ejecuta los 53 casos contra el Gateway (localhost:8080)
+```
+
+El script registra usuarios (ADMIN, OPERADOR, CLIENTE), crea clientes con RENIEC, paquetes, categorías, y valida cada respuesta HTTP esperada. Requiere que todos los contenedores estén arriba.
 
 ### Swagger UI
 
@@ -112,9 +120,9 @@ La documentación OpenAPI está disponible en:
 ### Pruebas Unitarias
 
 ```bash
-cd auth-service && mvn test        # 11+ tests
+cd auth-service && mvn test        # 15 tests
 cd clients-service && mvn test     # 46 tests
-cd paquetes-service && mvn test    # 131 tests
+cd paquetes-service && mvn test    # 135 tests
 ```
 
 ---
@@ -190,8 +198,8 @@ Cada workflow se ejecuta **solo** cuando cambian archivos de su servicio (path f
       │                             │                 │
       │ JWT validado aquí           │                 │ Feign ──▶ clients-service
       │ Headers propagados:         │ Feign ──▶       │          (verificar clientes,
-      │ X-User-Id, X-User-Roles     │ RENIEC API      │           obtener nombres)
-      │                             │ (+ CB + Retry)  │
+      │ X-User-Id, X-User-Roles,   │ RENIEC API      │           obtener nombres,
+      │ X-User-Email                │ (+ CB + Retry)  │           buscar por email)
       │                             │                 │
       └──── Solo los clientes ──────┘─────────────────┘
            interactúan vía el Gateway
@@ -207,7 +215,7 @@ Cada workflow se ejecuta **solo** cuando cambian archivos de su servicio (path f
 | **api-gateway** | **clients-service** | Sincrónica | HTTP/REST | Proxy de rutas |
 | **api-gateway** | **paquetes-service** | Sincrónica | HTTP/REST | Proxy de rutas |
 | **clients-service** | **RENIEC API** | Sincrónica | HTTP/REST (Feign) | Consulta DNI para registro de clientes |
-| **paquetes-service** | **clients-service** | Sincrónica | HTTP/REST (Feign) | Verificar existencia de remitente/destinatario al registrar paquete; obtener nombres completos para enriquecer respuestas |
+| **paquetes-service** | **clients-service** | Sincrónica | HTTP/REST (Feign) | Verificar existencia de remitente/destinatario al registrar paquete; obtener nombres completos para enriquecer respuestas; buscar cliente por email para endpoints CLIENTE (`/mis-paquetes`) |
 | **auth-service** | **Vault** | Sincrónica | HTTP | Lee `jwt.secret` al arrancar |
 | **clients-service** | **Vault** | Sincrónica | HTTP | Lee `reniec.api.token`, DB credentials |
 | **paquetes-service** | **Vault** | Sincrónica | HTTP | Lee `jwt.secret`, DB credentials |
@@ -418,6 +426,7 @@ Se eligió comunicación **sincrónica** para ambos flujos inter-servicio:
 1. **paquetes-service → clients-service** (Feign + Load Balancing vía Eureka)
    - **Por qué sync:** El registro de paquete requiere verificar que remitente y destinatario existen **antes** de persistir. La integridad referencial entre servicios es crítica para el negocio.
    - **Datos consultados:** UUID del cliente, nombre completo, DNI, email.
+   - **Endpoints Feign:** `GET /{id}`, `GET /buscar?nombre=`, `GET /por-email?email=`
    - **Resiliencia:** `@CircuitBreaker` + `@Retry` con backoff exponencial. Si clients-service no está disponible, el fallback lanza `ExternalServiceException` (502).
 
 2. **clients-service → RENIEC API** (Feign directo)
@@ -426,19 +435,27 @@ Se eligió comunicación **sincrónica** para ambos flujos inter-servicio:
 
 ### Decisión difícil de diseño
 
-La decisión más compleja fue **cómo enriquecer las respuestas de paquetes con nombres de clientes**. Las opciones eran:
+La decisión más compleja fue **cómo enriquecer las respuestas de paquetes con nombres de clientes** y **cómo resolver la identidad de CLIENTE en los endpoints `/mis-paquetes`**. Las opciones eran:
 - **Opción A:** Replicar datos de clientes en la BD de paquetes (eventual consistency via eventos).
 - **Opción B:** Llamar a clients-service por cada consulta (N+1 problem).
+- **Opción C:** Usar un UUID compartido generado determinísticamente desde el email.
 
-**Decisión:** Se eligió la **Opción B** (llamada por consulta) porque:
+**Decisión (enriquecimiento):** Se eligió la **Opción B** (llamada por consulta) porque:
 - Evita la duplicación de datos y los problemas de consistencia.
 - Los paquetes típicamente tienen pocos resultados por consulta (1-20).
 - El circuit breaker protege de caídas en cascada.
 - Se encapsula en un helper `enrichWithClientNames()` que falla silenciosamente si clients-service no está disponible.
 
+**Decisión (identidad CLIENTE):** Auth-service y clients-service tienen UUIDs independientes. Para resolver la identidad del CLIENTE en `/mis-paquetes`, el Gateway extrae el `email` del JWT y lo propaga como header `X-User-Email`. El paquetes-service usa Feign (`buscarPorEmail`) para obtener el UUID del cliente en clients-service, y con eso valida la propiedad del paquete.
+
 ### Headers de Trazabilidad
 
-El Gateway propaga `X-User-Id` y `X-User-Roles` como headers HTTP reales. Paquetes-service los reenvía en llamadas Feign a clients-service vía `FeignAuthInterceptor`.
+El Gateway propaga **tres headers** como headers HTTP reales:
+- `X-User-Id` — UUID del usuario (JWT `sub`)
+- `X-User-Roles` — Roles del usuario (JWT `roles`)
+- `X-User-Email` — Email del usuario (JWT `email`)
+
+Paquetes-service los reenvía en llamadas Feign a clients-service vía `FeignAuthInterceptor`. El header `X-User-Email` se usa para resolver la identidad de CLIENTE en los endpoints de paquetes propios.
 
 ---
 
@@ -446,7 +463,7 @@ El Gateway propaga `X-User-Id` y `X-User-Roles` como headers HTTP reales. Paquet
 
 ### Estrategia: JWT Validado Solo en el Gateway
 
-El JWT se valida **exclusivamente** en el API Gateway (`JwtAuthenticationFilter`). Los servicios de negocio reciben headers `X-User-Id` y `X-User-Roles` pre-validados.
+El JWT se valida **exclusivamente** en el API Gateway (`JwtAuthenticationFilter`). Los servicios de negocio reciben headers `X-User-Id`, `X-User-Roles` y `X-User-Email` pre-validados.
 
 **Por qué centralizar en el Gateway:**
 - Evita duplicar la lógica de validación JWT en cada servicio.
@@ -460,11 +477,11 @@ El JWT se valida **exclusivamente** en el API Gateway (`JwtAuthenticationFilter`
 2. Cliente envía: Authorization: Bearer <token>
 3. Gateway (JwtAuthenticationFilter):
    a. Decodifica y valida JWT (firma, expiración)
-   b. Extrae userId, roles
+   b. Extrae userId, roles, email
    c. Setea SecurityContext con GrantedAuthority (ROLE_xxx)
-   d. Agrega headers X-User-Id, X-User-Roles al request
+   d. Agrega headers X-User-Id, X-User-Roles, X-User-Email al request
 4. Servicio destino (HeaderAuthenticationFilter):
-   a. Lee X-User-Id, X-User-Roles
+   a. Lee X-User-Id, X-User-Roles, X-User-Email
    b. Crea UsernamePasswordAuthenticationToken
    c. @PreAuthorize verifica permisos
 ```
@@ -475,7 +492,7 @@ El JWT se valida **exclusivamente** en el API Gateway (`JwtAuthenticationFilter`
 |-----|----------|
 | `ADMIN` | Acceso total: CRUD de clientes, paquetes, categorías. Eliminar registros. |
 | `OPERADOR` | Crear/consultar/actualizar paquetes y clientes. No puede eliminar. |
-| `CLIENTE` | Solo consultar sus propios paquetes (`/mis-paquetes`) y historial. |
+| `CLIENTE` | Solo consultar sus propios paquetes (`/mis-paquetes`) y historial. Identidad resuelta por email (Feign `buscarPorEmail`). |
 
 ### DataInitializer
 
@@ -583,25 +600,30 @@ curl -s http://localhost:8080/api/v1/paquetes/buscar?texto=RC \
 |----------|---------|------|-------|-----------|
 | **auth-service** | `AuthServiceTest` | Unit (Mockito) | 5 | Happy path, credenciales inválidas, email duplicado |
 | **auth-service** | `AuthControllerTest` | WebMvcTest | 6 | Login, register, validación |
+| **api-gateway** | `JwtAuthenticationFilterUnitTest` | Unit (Mockito) | 7 | X-User-Id, X-User-Roles, X-User-Email headers |
 | **clients-service** | `ClienteServiceTest` | Unit (Mockito) | 5 | Happy path, DNI duplicado, email duplicado |
 | **clients-service** | `ReniecAdapterTest` | Unit (Mockito) | 8 | RENIEC success, 404, 500, 502, 503 |
 | **clients-service** | `ClienteControllerTest` | WebMvcTest | 13 | CRUD completo, roles, validación |
 | **clients-service** | `GlobalExceptionHandlerTest` | WebMvcTest | 6 | 400, 404, 409, 502 |
 | **clients-service** | `ClienteRepositoryAdapterTest` | Integration (Testcontainers) | 8 | CRUD con BD real |
 | **clients-service** | `ClienteMapperTest` | Unit | 3 | Mapeo entity ↔ domain |
-| **paquetes-service** | `PaqueteServiceTest` | Unit (Mockito) | 10+ | Happy path, transición inválida, cliente no encontrado |
-| **paquetes-service** | `PaqueteControllerTest` | WebMvcTest | 24 | CRUD, roles, CLIENTE endpoints |
+| **paquetes-service** | `PaqueteServiceTest` | Unit (Mockito) | 31 | Happy path, transición inválida, cliente no encontrado, mis-paquetes |
+| **paquetes-service** | `PaqueteControllerTest` | WebMvcTest | 24 | CRUD, roles, CLIENTE endpoints con email resolution |
 | **paquetes-service** | `CategoriaControllerTest` | WebMvcTest | 5 | CRUD categorías, ADMIN-only |
 | **paquetes-service** | `GlobalExceptionHandlerTest` | WebMvcTest | 6 | 400, 404, 409, 502 |
-| **paquetes-service** | `ClienteFeignAdapterTest` | Unit (Mockito) | 4 | Feign success, 404, error |
-| **paquetes-service** | Repository tests | Integration (Testcontainers) | 6+ | CRUD con BD real |
+| **paquetes-service** | `ClienteFeignAdapterTest` | Unit (Mockito) | 12 | obtenerCliente, buscarPorNombre, buscarPorEmail — success, 404, error, fallback |
+| **paquetes-service** | Repository tests | Integration (Testcontainers) | 16 | CRUD con BD real |
 
 ### Ejecutar pruebas
 
 ```bash
-cd auth-service && mvn test        # 11+ tests
+# Pruebas unitarias
+cd auth-service && mvn test        # 15 tests
 cd clients-service && mvn test     # 46 tests
-cd paquetes-service && mvn test    # 131 tests (12 skipped contextLoads)
+cd paquetes-service && mvn test    # 135 tests
+
+# Pruebas de integración (requiere Docker corriendo)
+bash run-tests.sh                  # 53 casos contra el API Gateway
 ```
 
 > Los servicios de negocio **no están expuestos al host** (RNF-08). Todo el tráfico pasa por el Gateway.
