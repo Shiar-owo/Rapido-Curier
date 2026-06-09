@@ -92,7 +92,7 @@ eureka.instance.lease-renewal-interval-in-seconds: 10   # Heartbeat cada 10s
 eureka.instance.lease-expiration-duration-in-seconds: 30  # Expira tras 30s sin heartbeat
 ```
 
-![Eureka Dashboard](imagenes/Eureka_Dashboard.png)
+![Eureka Dashboard](documentation/imagenes/Eureka_Dashboard.png)
 
 ---
 
@@ -112,7 +112,7 @@ El script registra usuarios (ADMIN, OPERADOR, CLIENTE), crea clientes con RENIEC
 
 ### Swagger UI
 
-![Swagger UI](imagenes/Swagger-UI.png)
+![Swagger UI](documentation/imagenes/Swagger-UI.png)
 
 La documentación OpenAPI está disponible en:
 - **Swagger UI:** http://localhost:8080/swagger-ui.html
