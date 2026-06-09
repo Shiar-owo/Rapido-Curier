@@ -231,6 +231,18 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
     }
 
     @Override
+    public Paquete obtenerMisPaquetePorId(UUID clienteId, UUID paqueteId) {
+        Paquete paquete = repo.buscarPorId(paqueteId)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        if (!paquete.getRemitenteId().equals(clienteId) && !paquete.getDestinatarioId().equals(clienteId)) {
+            throw new ResourceNotFoundException("Paquete no encontrado: " + paqueteId);
+        }
+
+        return paquete;
+    }
+
+    @Override
     public List<EstadoHistorial> obtenerHistorialMisPaquetes(UUID clienteId, UUID paqueteId) {
         Paquete paquete = repo.buscarPorId(paqueteId)
             .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));

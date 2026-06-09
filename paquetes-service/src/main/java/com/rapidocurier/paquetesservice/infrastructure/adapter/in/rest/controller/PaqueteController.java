@@ -126,6 +126,23 @@ public class PaqueteController {
         return ApiResponse.ok(paquetes);
     }
 
+    @GetMapping("/mis-paquetes/{id}")
+    @PreAuthorize("hasRole('CLIENTE')")
+    @Operation(summary = "Get one of my packages", description = "Returns a single package owned by the authenticated user. Requires CLIENTE role.")
+    @ApiResponses({
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "200", description = "Package found"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "401", description = "Unauthorized"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "403", description = "Forbidden — requires CLIENTE role"),
+        @io.swagger.v3.oas.annotations.responses.ApiResponse(responseCode = "404", description = "Package not found or not owned by user")
+    })
+    public ResponseEntity<ApiResponse<PaqueteResponse>> misPaquetePorId(
+            @PathVariable UUID id,
+            jakarta.servlet.http.HttpServletRequest httpRequest) {
+        UUID clienteId = resolveClientIdFromEmail(httpRequest);
+        Paquete paquete = consultarMisPaquetesUseCase.obtenerMisPaquetePorId(clienteId, id);
+        return ApiResponse.ok(enrichWithClientNames(paquete));
+    }
+
     @GetMapping("/mis-paquetes/{id}/historial")
     @PreAuthorize("hasRole('CLIENTE')")
     @Operation(summary = "Get history of my package", description = "Returns the status history of a package owned by the authenticated user. Requires CLIENTE role.")

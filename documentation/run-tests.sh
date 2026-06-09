@@ -1,7 +1,7 @@
 #!/bin/bash
 # ============================================
 #  Script de Pruebas — examples.md
-#  Ejecuta los 52 casos de prueba contra el
+#  Ejecuta los 53 casos de prueba contra el
 #  API Gateway (localhost:8080)
 # ============================================
 
@@ -39,15 +39,29 @@ section() {
 
 # ── Verificar que los servicios estén arriba ─
 echo -e "${BOLD}Verificando servicios...${NC}"
-for i in $(seq 1 45); do
+for i in $(seq 1 60); do
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/v1/auth/login" -H "Content-Type: application/json" -d '{}' 2>/dev/null)
   if [ "$HTTP_CODE" = "400" ] || [ "$HTTP_CODE" = "401" ]; then
     echo -e "${GREEN}Gateway OK${NC}"
     break
   fi
-  if [ $i -eq 45 ]; then
+  if [ $i -eq 60 ]; then
     echo -e "${RED}ERROR: Gateway no disponible en $BASE_URL${NC}"
     exit 1
+  fi
+  sleep 3
+done
+
+# Esperar a que los servicios backend estén listos (Eureka propagation)
+for i in $(seq 1 30); do
+  TEST_TOKEN="eyJhbGciOiJIUzI1NiJ9.test"
+  HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/api/v1/clientes" -H "Authorization: Bearer $TEST_TOKEN" 2>/dev/null)
+  if [ "$HTTP_CODE" != "502" ] && [ "$HTTP_CODE" != "503" ]; then
+    echo -e "${GREEN}Backend services ready${NC}"
+    break
+  fi
+  if [ $i -eq 30 ]; then
+    echo -e "${RED}WARNING: Some backend services may not be ready${NC}"
   fi
   sleep 3
 done
@@ -130,6 +144,13 @@ RESP2=$(curl -s -X POST "$BASE_URL/api/v1/clientes" \
   -H "Authorization: Bearer $OP_TOKEN" \
   -d '{"dni":"40826421","email":"pedro.garcia@correo.com"}')
 DEST_ID=$(echo "$RESP2" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])" 2>/dev/null)
+
+# Registrar tercer cliente (DNI 16002918) — para Caso 19c (paquete ajeno)
+RESP3=$(curl -s -X POST "$BASE_URL/api/v1/clientes" \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $OP_TOKEN" \
+  -d '{"dni":"16002918","email":"luis.mendoza@correo.com"}')
+THIRD_ID=$(echo "$RESP3" | python3 -c "import sys,json; print(json.load(sys.stdin)['data']['id'])" 2>/dev/null)
 
 # Caso 6 — Datos inválidos
 CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST "$BASE_URL/api/v1/clientes" \
@@ -300,7 +321,7 @@ RESP2=$(curl -s -X POST "$BASE_URL/api/v1/paquetes" \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer $OP_TOKEN" \
   -d "{
-    \"remitenteId\":\"$REMI_ID\",
+    \"remitenteId\":\"$THIRD_ID\",
     \"destinatarioId\":\"$DEST_ID\",
     \"pesoKg\":2.0,
     \"valorDeclarado\":300.00,

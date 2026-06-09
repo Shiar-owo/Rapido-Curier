@@ -433,21 +433,6 @@ Se eligió comunicación **sincrónica** para ambos flujos inter-servicio:
    - **Por qué sync:** El nombre del cliente debe obtenerse de RENIEC en el momento del registro. No hay escenario donde se necesite diferir esta consulta.
    - **Resiliencia:** `@CircuitBreaker` + `@Retry`. Si RENIEC falla, se retorna 502.
 
-### Decisión difícil de diseño
-
-La decisión más compleja fue **cómo enriquecer las respuestas de paquetes con nombres de clientes** y **cómo resolver la identidad de CLIENTE en los endpoints `/mis-paquetes`**. Las opciones eran:
-- **Opción A:** Replicar datos de clientes en la BD de paquetes (eventual consistency via eventos).
-- **Opción B:** Llamar a clients-service por cada consulta (N+1 problem).
-- **Opción C:** Usar un UUID compartido generado determinísticamente desde el email.
-
-**Decisión (enriquecimiento):** Se eligió la **Opción B** (llamada por consulta) porque:
-- Evita la duplicación de datos y los problemas de consistencia.
-- Los paquetes típicamente tienen pocos resultados por consulta (1-20).
-- El circuit breaker protege de caídas en cascada.
-- Se encapsula en un helper `enrichWithClientNames()` que falla silenciosamente si clients-service no está disponible.
-
-**Decisión (identidad CLIENTE):** Auth-service y clients-service tienen UUIDs independientes. Para resolver la identidad del CLIENTE en `/mis-paquetes`, el Gateway extrae el `email` del JWT y lo propaga como header `X-User-Email`. El paquetes-service usa Feign (`buscarPorEmail`) para obtener el UUID del cliente en clients-service, y con eso valida la propiedad del paquete.
-
 ### Headers de Trazabilidad
 
 El Gateway propaga **tres headers** como headers HTTP reales:
