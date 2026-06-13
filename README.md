@@ -36,7 +36,7 @@ Plataforma de mensajería y paquetería basada en microservicios con Spring Boot
 ### Paso 1: Clonar
 
 ```bash
-git clone https://github.com/Shiar-owo/Rapido-Curier-Microservices.git
+git clone https://github.com/Shiar-owo/Rapido-Curier.git
 cd RapidoCurier
 ```
 
