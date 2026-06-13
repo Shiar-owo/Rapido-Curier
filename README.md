@@ -40,6 +40,11 @@ git clone https://github.com/Shiar-owo/Rapido-Curier.git
 cd Rapido-Curier
 ```
 
+Link del repositorio del Config-Server:
+https://github.com/Shiar-owo/Rapido-Curier-Configs.git
+
+No es necesario clonarlo, pero sí es importante para tener en cuenta las configuraciones de cada microservicio
+
 ### Paso 2: Levantar todo
 
 ```bash
