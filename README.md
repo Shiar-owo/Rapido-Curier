@@ -507,6 +507,10 @@ Vault ← vault-init (contenedor) ← init-vault.sh
        Config Server también lee desde Vault para servir configuración.
 ```
 
+### Configuración de Vault en los clientes
+
+Se utiliza `spring.config.import: vault://` en `application.yaml` en lugar del enfoque tradicional con `bootstrap.yaml`. Esta es la forma recomendada desde Spring Boot 2.4+ / Spring Cloud 2020+, ya que simplifica la configuración eliminando el contexto de arranque separado (*bootstrap context*) que requería un archivo y dependencia adicionales (`spring-cloud-starter-bootstrap`). El resultado es idéntico: cada servicio conecta a Vault al iniciar y lee sus secretos del KV store.
+
 **El secreto JWT NO aparece en ningún archivo del repositorio.** Solo existe en Vault y se inyecta dinámicamente al arrancar cada servicio.
 
 ---
