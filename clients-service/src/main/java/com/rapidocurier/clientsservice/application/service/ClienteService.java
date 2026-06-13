@@ -67,6 +67,12 @@ public class ClienteService implements RegistrarClienteUseCase, ConsultarCliente
     }
 
     @Override
+    public Cliente buscarPorEmail(String email) {
+        return repositoryPort.buscarPorEmail(email)
+            .orElseThrow(() -> new ResourceNotFoundException("Cliente no encontrado con email: " + email));
+    }
+
+    @Override
     public void eliminar(UUID id) {
         if (repositoryPort.buscarPorId(id).isEmpty()) {
             throw new ResourceNotFoundException("Cliente no encontrado");

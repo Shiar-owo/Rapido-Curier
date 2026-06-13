@@ -51,6 +51,18 @@ public class PaqueteRepositoryAdapter implements PaqueteRepositoryPort {
     }
 
     @Override
+    public List<Paquete> buscarPorClienteId(UUID clienteId) {
+        return repository.findByClienteId(clienteId)
+            .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
+    public List<Paquete> buscarPorCategoriaNombre(String nombreCategoria) {
+        return repository.findByCategoriaNombre(nombreCategoria)
+            .stream().map(mapper::toDomain).toList();
+    }
+
+    @Override
     public void eliminar(UUID id) {
         repository.deleteById(id);
     }

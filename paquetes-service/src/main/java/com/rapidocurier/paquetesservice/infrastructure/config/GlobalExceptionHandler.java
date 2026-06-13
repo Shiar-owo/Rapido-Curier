@@ -58,13 +58,13 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(ExternalServiceException.class)
     public ResponseEntity<ApiResponse<Void>> handleExternalService(ExternalServiceException ex) {
-        return ApiResponse.error(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+        return ApiResponse.error(HttpStatus.BAD_GATEWAY, ex.getMessage());
     }
 
     @ExceptionHandler(CallNotPermittedException.class)
     public ResponseEntity<ApiResponse<Void>> handleCircuitBreakerOpen(CallNotPermittedException ex) {
         log.warn("Circuito abierto para clients-service: {}", ex.getMessage());
-        return ApiResponse.error(HttpStatus.SERVICE_UNAVAILABLE, "Servicio de clientes no disponible, intente más tarde");
+        return ApiResponse.error(HttpStatus.BAD_GATEWAY, "Servicio de clientes no disponible, intente más tarde");
     }
 
     @ExceptionHandler(AccessDeniedException.class)

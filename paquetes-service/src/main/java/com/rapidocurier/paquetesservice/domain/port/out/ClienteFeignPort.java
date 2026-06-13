@@ -8,4 +8,5 @@ import java.util.UUID;
 public interface ClienteFeignPort {
     ClienteReferencia obtenerCliente(UUID id);
     List<ClienteReferencia> buscarPorNombre(String nombre);
+    ClienteReferencia buscarPorEmail(String email);
 }

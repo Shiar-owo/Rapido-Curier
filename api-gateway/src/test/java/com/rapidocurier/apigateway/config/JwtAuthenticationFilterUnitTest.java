@@ -107,7 +107,7 @@ class JwtAuthenticationFilterUnitTest {
         Claims claims = Jwts.parser()
             .verifyWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
             .build()
-            .parseSignedClaims(generarToken(userId, null))
+            .parseSignedClaims(generarToken(userId, null, null))
             .getPayload();
 
         when(jwtService.validarToken("token-sin-roles")).thenReturn(claims);
@@ -124,13 +124,62 @@ class JwtAuthenticationFilterUnitTest {
         assertNull(wrapped.getHeader("X-User-Roles"));
     }
 
-    private String generarToken(String subject, String roles) {
+    @Test
+    void doFilter_tokenValido_agregaXUserEmailHeader() throws Exception {
+        String userId = UUID.randomUUID().toString();
+        Claims claims = Jwts.parser()
+            .verifyWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
+            .build()
+            .parseSignedClaims(generarToken(userId, "ADMIN", "admin@test.com"))
+            .getPayload();
+
+        when(jwtService.validarToken("token-con-email")).thenReturn(claims);
+
+        request.setRequestURI("/api/v1/clientes");
+        request.addHeader("Authorization", "Bearer token-con-email");
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain).doFilter(requestCaptor.capture(), eq(response));
+        HttpServletRequest wrapped = requestCaptor.getValue();
+
+        assertEquals("admin@test.com", wrapped.getHeader("X-User-Email"));
+    }
+
+    @Test
+    void doFilter_tokenValido_sinEmail_emailHeaderEsNull() throws Exception {
+        String userId = UUID.randomUUID().toString();
+        Claims claims = Jwts.parser()
+            .verifyWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)))
+            .build()
+            .parseSignedClaims(generarToken(userId, "ADMIN", null))
+            .getPayload();
+
+        when(jwtService.validarToken("token-sin-email")).thenReturn(claims);
+
+        request.setRequestURI("/api/v1/clientes");
+        request.addHeader("Authorization", "Bearer token-sin-email");
+
+        filter.doFilter(request, response, filterChain);
+
+        verify(filterChain).doFilter(requestCaptor.capture(), eq(response));
+        HttpServletRequest wrapped = requestCaptor.getValue();
+
+        assertNull(wrapped.getHeader("X-User-Email"));
+    }
+
+    private String generarToken(String subject, String roles, String email) {
         var builder = Jwts.builder()
             .subject(subject)
             .claim("roles", roles)
+            .claim("email", email)
             .issuedAt(new Date())
             .expiration(new Date(System.currentTimeMillis() + 3600000))
             .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)));
         return builder.compact();
+    }
+
+    private String generarToken(String subject, String roles) {
+        return generarToken(subject, roles, null);
     }
 }

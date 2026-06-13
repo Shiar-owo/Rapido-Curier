@@ -1,22 +1,24 @@
 package com.rapidocurier.paquetesservice.application.service;
 
-import org.springframework.stereotype.Service;
+import com.rapidocurier.paquetesservice.application.config.TarifaProperties;
 
-import java.util.Map;
+import org.springframework.stereotype.Service;
 
 @Service
 public class TarifaCalculator {
 
-    private static final Map<String, Double> TARIFAS_RUTA = Map.of(
-        "LIMA-AREQUIPA", 15.0, "AREQUIPA-LIMA", 15.0,
-        "LIMA-CUSCO", 20.0, "CUSCO-LIMA", 20.0,
-        "AREQUIPA-CUSCO", 12.0, "CUSCO-AREQUIPA", 12.0
-    );
+    private final TarifaProperties tarifaProperties;
+
+    public TarifaCalculator(TarifaProperties tarifaProperties) {
+        this.tarifaProperties = tarifaProperties;
+    }
 
     public double calcular(double pesoKg, double valorDeclarado,
                            String origen, String destino) {
         String clave = origen.toUpperCase() + "-" + destino.toUpperCase();
-        double tarifaRuta = TARIFAS_RUTA.getOrDefault(clave, 5.0);
-        return (pesoKg * 8.0) + (valorDeclarado * 0.01) + tarifaRuta;
+        double tarifaRuta = tarifaProperties.getRutas().getOrDefault(clave, tarifaProperties.getTarifaDefault());
+        return (pesoKg * tarifaProperties.getCostoPorKg())
+             + (valorDeclarado * tarifaProperties.getPorcentajeValorDeclarado())
+             + tarifaRuta;
     }
 }

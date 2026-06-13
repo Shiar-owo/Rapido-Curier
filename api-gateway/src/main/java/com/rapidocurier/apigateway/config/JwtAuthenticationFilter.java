@@ -66,6 +66,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             Claims claims = jwtService.validarToken(token);
             String userId = claims.getSubject();
             String roles = claims.get("roles", String.class);
+            String email = claims.get("email", String.class);
 
             var authorities = new ArrayList<SimpleGrantedAuthority>();
             if (roles != null) {
@@ -82,6 +83,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 public String getHeader(String name) {
                     if ("X-User-Id".equals(name)) return userId;
                     if ("X-User-Roles".equals(name)) return roles;
+                    if ("X-User-Email".equals(name)) return email;
                     return super.getHeader(name);
                 }
 
@@ -90,6 +92,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     List<String> names = new ArrayList<>(Collections.list(super.getHeaderNames()));
                     names.add("X-User-Id");
                     names.add("X-User-Roles");
+                    names.add("X-User-Email");
                     return Collections.enumeration(names);
                 }
 
@@ -100,6 +103,9 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                     }
                     if ("X-User-Roles".equals(name)) {
                         return Collections.enumeration(roles != null ? List.of(roles) : List.of());
+                    }
+                    if ("X-User-Email".equals(name)) {
+                        return Collections.enumeration(email != null ? List.of(email) : List.of());
                     }
                     return super.getHeaders(name);
                 }

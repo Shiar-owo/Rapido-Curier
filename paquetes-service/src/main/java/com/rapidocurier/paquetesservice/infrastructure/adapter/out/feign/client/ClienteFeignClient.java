@@ -19,4 +19,7 @@ public interface ClienteFeignClient {
 
     @GetMapping("/api/v1/clientes/buscar")
     FeignApiResponse<List<ClienteResponse>> buscarPorNombre(@RequestParam("nombre") String nombre);
+
+    @GetMapping("/api/v1/clientes/por-email")
+    FeignApiResponse<ClienteResponse> buscarPorEmail(@RequestParam("email") String email);
 }

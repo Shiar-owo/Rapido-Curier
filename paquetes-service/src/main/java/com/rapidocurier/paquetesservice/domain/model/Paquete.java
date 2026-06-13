@@ -61,7 +61,7 @@ public class Paquete {
             sucursalOrigen, sucursalDestino,
             tarifa,
             EstadoPaquete.REGISTRADO,
-            categorias,
+            new HashSet<>(categorias),
             now, now
         );
     }

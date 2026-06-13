@@ -17,11 +17,15 @@ vault secrets enable -address=$VAULT_ADDR -path=secret kv-v2 2>/dev/null || true
 # Load secrets for auth-service
 vault kv put -address=$VAULT_ADDR secret/auth-service \
     jwt.secret="contrasenia-super-mega-secreta-32-caracteres" \
-    jwt.expiration="86400000"
+    jwt.expiration="86400000" \
+    db.username="auth_user" \
+    db.password="auth_pass"
 
 # Load secrets for clients-service
 vault kv put -address=$VAULT_ADDR secret/clients-service \
-    reniec.api.token="sk_14107.2R91IK9p8iH3dv0u5D7RJYgwDHgykbli"
+    reniec.api.token="sk_14107.2R91IK9p8iH3dv0u5D7RJYgwDHgykbli" \
+    db.username="clientes_user" \
+    db.password="clientes_pass"
 
 # Load secrets for api-gateway
 vault kv put -address=$VAULT_ADDR secret/api-gateway \
@@ -29,6 +33,8 @@ vault kv put -address=$VAULT_ADDR secret/api-gateway \
 
 # Load secrets for paquetes-service
 vault kv put -address=$VAULT_ADDR secret/paquetes-service \
-    jwt.secret="contrasenia-super-mega-secreta-32-caracteres"
+    jwt.secret="contrasenia-super-mega-secreta-32-caracteres" \
+    db.username="paquetes_user" \
+    db.password="paquetes_pass"
 
 echo "All secrets loaded into Vault!"

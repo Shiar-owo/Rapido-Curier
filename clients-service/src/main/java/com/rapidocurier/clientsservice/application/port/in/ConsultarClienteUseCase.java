@@ -9,5 +9,6 @@ public interface ConsultarClienteUseCase {
     Cliente buscarPorId(UUID id);
     List<Cliente> listarTodos();
     List<Cliente> buscarPorNombre(String nombre);
+    Cliente buscarPorEmail(String email);
     void eliminar(UUID id);
 }

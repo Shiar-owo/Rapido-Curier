@@ -1,5 +1,6 @@
 package com.rapidocurier.paquetesservice.application.service;
 
+import com.rapidocurier.paquetesservice.application.port.in.PaqueteActualizarRequest;
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
 import com.rapidocurier.paquetesservice.domain.exception.ConflictException;
 import com.rapidocurier.paquetesservice.domain.exception.ResourceNotFoundException;
@@ -78,9 +79,9 @@ class PaqueteServiceTest {
         Categoria categoria = new Categoria(catId, "FRAGIL", "Artículo frágil");
 
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
         when(categoriaRepo.buscarPorId(catId)).thenReturn(Optional.of(categoria));
         when(tarifaCalculator.calcular(5.0, 100.0, "LIMA", "AREQUIPA")).thenReturn(27.0);
         when(repo.guardar(any(Paquete.class))).thenReturn(paquete);
@@ -131,7 +132,7 @@ class PaqueteServiceTest {
     @Test
     void registrar_destinatarioNoExiste_lanzaResourceNotFoundException() {
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId))
             .thenThrow(new ResourceNotFoundException("Cliente no encontrado: " + destinatarioId));
 
@@ -149,9 +150,9 @@ class PaqueteServiceTest {
     @Test
     void registrar_sinCategorias_lanzaConflictException() {
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
 
         PaqueteRequest request = new PaqueteRequest(
             remitenteId, destinatarioId,
@@ -167,9 +168,9 @@ class PaqueteServiceTest {
     @Test
     void registrar_categoriasNull_lanzaConflictException() {
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
 
         PaqueteRequest request = new PaqueteRequest(
             remitenteId, destinatarioId,
@@ -186,9 +187,9 @@ class PaqueteServiceTest {
     void registrar_categoriaNoExiste_lanzaResourceNotFoundException() {
         UUID catId = UUID.randomUUID();
         when(clienteFeign.obtenerCliente(remitenteId)).thenReturn(
-            new ClienteReferencia(remitenteId, "12345678", "Juan", "juan@test.com"));
+            new ClienteReferencia(remitenteId, "12345678", "Juan", "Juan", "juan@test.com"));
         when(clienteFeign.obtenerCliente(destinatarioId)).thenReturn(
-            new ClienteReferencia(destinatarioId, "87654321", "Maria", "maria@test.com"));
+            new ClienteReferencia(destinatarioId, "87654321", "Maria", "Maria", "maria@test.com"));
         when(categoriaRepo.buscarPorId(catId)).thenReturn(Optional.empty());
 
         PaqueteRequest request = new PaqueteRequest(
@@ -301,7 +302,7 @@ class PaqueteServiceTest {
 
     @Test
     void buscarPorRemitenteOrDestinatario_conClientes_retornaPaquetes() {
-        ClienteReferencia cliente = new ClienteReferencia(remitenteId, "12345678", "Juan Pérez", "juan@test.com");
+        ClienteReferencia cliente = new ClienteReferencia(remitenteId, "12345678", "Juan Pérez", "Juan Pérez", "juan@test.com");
         when(clienteFeign.buscarPorNombre("Juan")).thenReturn(List.of(cliente));
         when(repo.buscarPorRemitenteIdOrDestinatarioId(Set.of(remitenteId))).thenReturn(List.of(paquete));
 
@@ -319,5 +320,162 @@ class PaqueteServiceTest {
 
         assertTrue(result.isEmpty());
         verify(repo, never()).buscarPorRemitenteIdOrDestinatarioId(any());
+    }
+
+    @Test
+    void actualizar_paqueteExiste_modificaYRecalculaTarifa() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(repo.guardar(any(Paquete.class))).thenReturn(paquete);
+        when(tarifaCalculator.calcular(7.5, 200.0, "LIMA", "AREQUIPA")).thenReturn(45.0);
+
+        PaqueteActualizarRequest request = new PaqueteActualizarRequest(7.5, 200.0, "LIMA", "AREQUIPA");
+        Paquete result = service.actualizar(paquete.getId(), request);
+
+        assertEquals(7.5, result.getPesoKg());
+        assertEquals(200.0, result.getValorDeclarado());
+        assertEquals(45.0, result.getTarifa());
+        verify(repo).guardar(paquete);
+    }
+
+    @Test
+    void actualizar_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        PaqueteActualizarRequest request = new PaqueteActualizarRequest(7.5, 200.0, null, null);
+
+        assertThrows(ResourceNotFoundException.class, () -> service.actualizar(id, request));
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void eliminar_paqueteExiste_elimina() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+
+        service.eliminar(paquete.getId());
+
+        verify(repo).eliminar(paquete.getId());
+    }
+
+    @Test
+    void eliminar_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.eliminar(id));
+        verify(repo, never()).eliminar(any());
+    }
+
+    @Test
+    void asignarCategoria_happyPath_agregaCategoria() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+
+        Categoria nuevaCategoria = new Categoria(UUID.randomUUID(), "PELIGROSO", "Mercancía peligrosa");
+        when(categoriaRepo.buscarPorId(nuevaCategoria.getId())).thenReturn(Optional.of(nuevaCategoria));
+        when(repo.guardar(any(Paquete.class))).thenReturn(paquete);
+
+        service.asignarCategoria(paquete.getId(), nuevaCategoria.getId());
+
+        assertTrue(paquete.getCategorias().contains(nuevaCategoria));
+        verify(repo).guardar(paquete);
+    }
+
+    @Test
+    void asignarCategoria_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.asignarCategoria(id, UUID.randomUUID()));
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void asignarCategoria_categoriaNoExiste_lanzaResourceNotFoundException() {
+        UUID catId = UUID.randomUUID();
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(categoriaRepo.buscarPorId(catId)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class, () -> service.asignarCategoria(paquete.getId(), catId));
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void asignarCategoria_categoriaYaAsignada_lanzaConflictException() {
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(categoriaRepo.buscarPorId(categoriaBase.getId())).thenReturn(Optional.of(categoriaBase));
+
+        assertThrows(ConflictException.class,
+            () -> service.asignarCategoria(paquete.getId(), categoriaBase.getId()));
+        verify(repo, never()).guardar(any());
+    }
+
+    @Test
+    void buscarMisPaquetes_retornaListaDelCliente() {
+        UUID clienteId = UUID.randomUUID();
+        when(repo.buscarPorClienteId(clienteId)).thenReturn(List.of(paquete));
+
+        List<Paquete> result = service.buscarMisPaquetes(clienteId);
+
+        assertEquals(1, result.size());
+        assertEquals(paquete.getId(), result.get(0).getId());
+    }
+
+    @Test
+    void buscarMisPaquetes_sinPaquetes_retornaListaVacia() {
+        UUID clienteId = UUID.randomUUID();
+        when(repo.buscarPorClienteId(clienteId)).thenReturn(List.of());
+
+        List<Paquete> result = service.buscarMisPaquetes(clienteId);
+
+        assertTrue(result.isEmpty());
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_clienteEsRemitente_retornaHistorial() {
+        UUID clienteId = paquete.getRemitenteId();
+        List<EstadoHistorial> historialEsperado = List.of(
+            new EstadoHistorial(null, paquete.getId(), EstadoPaquete.REGISTRADO, OffsetDateTime.now(), "sistema")
+        );
+
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(historial.obtenerPorPaqueteId(paquete.getId())).thenReturn(historialEsperado);
+
+        List<EstadoHistorial> result = service.obtenerHistorialMisPaquetes(clienteId, paquete.getId());
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_clienteEsDestinatario_retornaHistorial() {
+        UUID clienteId = paquete.getDestinatarioId();
+        List<EstadoHistorial> historialEsperado = List.of(
+            new EstadoHistorial(null, paquete.getId(), EstadoPaquete.REGISTRADO, OffsetDateTime.now(), "sistema")
+        );
+
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+        when(historial.obtenerPorPaqueteId(paquete.getId())).thenReturn(historialEsperado);
+
+        List<EstadoHistorial> result = service.obtenerHistorialMisPaquetes(clienteId, paquete.getId());
+
+        assertEquals(1, result.size());
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_clienteNoEsPropietario_lanzaResourceNotFoundException() {
+        UUID clienteNoPropietario = UUID.randomUUID();
+
+        when(repo.buscarPorId(paquete.getId())).thenReturn(Optional.of(paquete));
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> service.obtenerHistorialMisPaquetes(clienteNoPropietario, paquete.getId()));
+    }
+
+    @Test
+    void obtenerHistorialMisPaquetes_paqueteNoExiste_lanzaResourceNotFoundException() {
+        UUID id = UUID.randomUUID();
+        when(repo.buscarPorId(id)).thenReturn(Optional.empty());
+
+        assertThrows(ResourceNotFoundException.class,
+            () -> service.obtenerHistorialMisPaquetes(UUID.randomUUID(), id));
     }
 }

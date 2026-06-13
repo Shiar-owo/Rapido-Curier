@@ -1,7 +1,12 @@
 package com.rapidocurier.paquetesservice.application.service;
 
+import com.rapidocurier.paquetesservice.application.port.in.ActualizarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.AsignarCategoriaUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.ConsultarMisPaquetesUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.ConsultarPaqueteUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.EliminarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.application.port.in.GestionarEstadoUseCase;
+import com.rapidocurier.paquetesservice.application.port.in.PaqueteActualizarRequest;
 import com.rapidocurier.paquetesservice.application.port.in.PaqueteRequest;
 import com.rapidocurier.paquetesservice.application.port.in.RegistrarPaqueteUseCase;
 import com.rapidocurier.paquetesservice.domain.exception.ConflictException;
@@ -30,7 +35,11 @@ import java.util.stream.Collectors;
 @Service
 public class PaqueteService implements RegistrarPaqueteUseCase,
                                        ConsultarPaqueteUseCase,
-                                       GestionarEstadoUseCase {
+                                       GestionarEstadoUseCase,
+                                       ActualizarPaqueteUseCase,
+                                       EliminarPaqueteUseCase,
+                                       AsignarCategoriaUseCase,
+                                       ConsultarMisPaquetesUseCase {
 
     private final PaqueteRepositoryPort repo;
     private final HistorialRepositoryPort historial;
@@ -127,6 +136,11 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
     }
 
     @Override
+    public List<Paquete> buscarPorCategoriaNombre(String nombreCategoria) {
+        return repo.buscarPorCategoriaNombre(nombreCategoria);
+    }
+
+    @Override
     @Transactional
     public void cambiarEstado(UUID paqueteId, EstadoPaquete nuevoEstado, String usuarioResponsable) {
         Paquete paquete = repo.buscarPorId(paqueteId)
@@ -152,6 +166,90 @@ public class PaqueteService implements RegistrarPaqueteUseCase,
     public List<EstadoHistorial> obtenerHistorial(UUID paqueteId) {
         repo.buscarPorId(paqueteId)
             .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        return historial.obtenerPorPaqueteId(paqueteId);
+    }
+
+    @Override
+    @Transactional
+    public Paquete actualizar(UUID id, PaqueteActualizarRequest request) {
+        Paquete paquete = repo.buscarPorId(id)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + id));
+
+        paquete.setPesoKg(request.pesoKg());
+        paquete.setValorDeclarado(request.valorDeclarado());
+
+        if (request.sucursalOrigen() != null) {
+            paquete.setSucursalOrigen(request.sucursalOrigen());
+        }
+        if (request.sucursalDestino() != null) {
+            paquete.setSucursalDestino(request.sucursalDestino());
+        }
+
+        double tarifa = tarifaCalculator.calcular(
+            paquete.getPesoKg(),
+            paquete.getValorDeclarado(),
+            paquete.getSucursalOrigen(),
+            paquete.getSucursalDestino()
+        );
+        paquete.setTarifa(tarifa);
+        paquete.setUpdatedAt(OffsetDateTime.now());
+
+        return repo.guardar(paquete);
+    }
+
+    @Override
+    @Transactional
+    public void eliminar(UUID id) {
+        if (!repo.buscarPorId(id).isPresent()) {
+            throw new ResourceNotFoundException("Paquete no encontrado: " + id);
+        }
+        repo.eliminar(id);
+    }
+
+    @Override
+    @Transactional
+    public void asignarCategoria(UUID paqueteId, UUID categoriaId) {
+        Paquete paquete = repo.buscarPorId(paqueteId)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        Categoria categoria = categoriaRepo.buscarPorId(categoriaId)
+            .orElseThrow(() -> new ResourceNotFoundException("Categoría no encontrada: " + categoriaId));
+
+        if (paquete.getCategorias().contains(categoria)) {
+            throw new ConflictException("La categoría '" + categoria.getNombre() + "' ya está asignada al paquete");
+        }
+
+        paquete.getCategorias().add(categoria);
+        paquete.setUpdatedAt(OffsetDateTime.now());
+        repo.guardar(paquete);
+    }
+
+    @Override
+    public List<Paquete> buscarMisPaquetes(UUID clienteId) {
+        return repo.buscarPorClienteId(clienteId);
+    }
+
+    @Override
+    public Paquete obtenerMisPaquetePorId(UUID clienteId, UUID paqueteId) {
+        Paquete paquete = repo.buscarPorId(paqueteId)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        if (!paquete.getRemitenteId().equals(clienteId) && !paquete.getDestinatarioId().equals(clienteId)) {
+            throw new ResourceNotFoundException("Paquete no encontrado: " + paqueteId);
+        }
+
+        return paquete;
+    }
+
+    @Override
+    public List<EstadoHistorial> obtenerHistorialMisPaquetes(UUID clienteId, UUID paqueteId) {
+        Paquete paquete = repo.buscarPorId(paqueteId)
+            .orElseThrow(() -> new ResourceNotFoundException("Paquete no encontrado: " + paqueteId));
+
+        if (!paquete.getRemitenteId().equals(clienteId) && !paquete.getDestinatarioId().equals(clienteId)) {
+            throw new ResourceNotFoundException("Paquete no encontrado: " + paqueteId);
+        }
 
         return historial.obtenerPorPaqueteId(paqueteId);
     }

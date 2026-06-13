@@ -11,4 +11,5 @@ public interface ConsultarPaqueteUseCase {
     List<Paquete> buscarPorCodigoRastreo(String texto);
     List<Paquete> buscarPorSucursalYEstado(String sucursal, EstadoPaquete estado);
     List<Paquete> buscarPorRemitenteOrDestinatario(String nombre);
+    List<Paquete> buscarPorCategoriaNombre(String nombreCategoria);
 }
